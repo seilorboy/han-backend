@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+
+# Dockerin luoma data (jos käytät host-voluumeja)
+db_data/
+*.log
+
+# Ympäristömuuttujat
+.env

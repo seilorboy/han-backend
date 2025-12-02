@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <title>Kulutuskayra (15 min)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>Kulutuskayra (15 min resoluutio)</h1>
+
+  <label for="dateInput">Paiva:</label>
+  <input type="date" id="dateInput">
+  <button id="loadBtn">Lataa</button>
+
+  <p id="status"></p>
+
+  <canvas id="energyChart" width="800" height="400"></canvas>
+
+  <script src="app.js"></script>
+</body>
+</html>
