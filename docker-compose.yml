@@ -9,9 +9,10 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "3306:3306"
+      - "3306:3306" # pitäneekö tämäkin muuttaa muotoon 127.0.0.1:3306 joka olisi turvallisempi
     volumes:
       - db_data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d # Valkamakatu 11 kanta
 
   api:
     build: ./api
@@ -24,19 +25,19 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
     ports:
-      - "5000:5000"
+      - "0.0.0.0:5000:5000"  # "127.0.0.1:5000:5000" Palautettava takaisin myöhemmin. > hoidetaan Dockerissa 80 -> 50000
 
   adminer:
     image: adminer
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8080:8080" # pitäneekö tämäkin muuttaa muotoon 127.0.0.1:8080 joka olisi turvallisempi
 
   web:
     build: ./web
     restart: unless-stopped
     ports:
-      - "8081:80"
+      - "127.0.0.1:8081:80"
 
 
 volumes:

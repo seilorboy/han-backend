@@ -1,5 +1,7 @@
-// Muuta tarvittaessa API_BASE, jos IP muuttuu
-const API_BASE = "http://192.168.1.120:5000";
+// Sama domain kuin sivu
+const API_BASE = "";
+
+//
 
 const dateInput = document.getElementById("dateInput");
 const loadBtn = document.getElementById("loadBtn");
@@ -22,7 +24,7 @@ async function loadData() {
   statusEl.textContent = "Ladataan dataa...";
 
   try {
-    const url = `${API_BASE}/api/energy/quarter-hour?date=${date}`;
+    const url = `${API_BASE}/api/energy/quarter-hour?date=${encodeURIComponent(date)}`;
     const resp = await fetch(url);
     if (!resp.ok) {
       throw new Error("API error: " + resp.status);
