@@ -124,7 +124,9 @@ docker compose up -d
 
 <hr>
 
-<h2>Database Structure (Example)</h2>
+<h2>Database Structure</h2>
+
+<p>A new database Valkamakatu 11 added. It is having it's own setup file.</p>
 
 <p>A typical measurement table:</p>
 
