@@ -16,3 +16,4 @@ data/
 *.save
 backups/
 .sql.gz
+db/legacy/
