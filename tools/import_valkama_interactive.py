@@ -1,6 +1,11 @@
 import os
 import glob
-from datetime import datetime
+from datetime import datetime, timezone
+
+try:
+    from .measurement_upsert import normalize_reading_type, upsert_measurement
+except ImportError:
+    from measurement_upsert import normalize_reading_type, upsert_measurement
 
 import mysql.connector
 import pandas as pd
@@ -64,6 +69,7 @@ def get_db_config():
     print(f"Yhdistetään kantaan: host={db_host}, database={db_name}, user={db_user}")
     return {
         "host": db_host,
+        "port": int(os.getenv("DB_PORT", "3306")),
         "user": db_user,
         "password": db_pass,
         "database": db_name,
@@ -155,11 +161,10 @@ def get_meter_id_common(cursor):
 
 def get_meter_id_pv(cursor):
     """
-    PV_MAIN-mittari (kiinteistön ylituotanto / 'Prod Tuotanto').
-    HUOM: role on 'load', ei 'prod', koska enum rajoittaa.
+    PV_MAIN: sisäisen alamittarin kokonaistuotanto (ei Datahub-ylituotanto).
     """
     cursor.execute(
-        "SELECT id FROM meters WHERE meter_serial = 'PV_MAIN' AND role = 'load';"
+        "SELECT id FROM meters WHERE meter_serial = 'PV_MAIN' AND role = 'pv_raw';"
     )
     row = cursor.fetchone()
     if not row:
@@ -179,7 +184,7 @@ def load_excel(path, sheet_name):
     return df
 
 
-def build_inserts_for_apartment(df, apartment_index, meter_id):
+def build_inserts_for_apartment(df, apartment_index, meter_id, reading_type="BN03"):
     """
     Apartment-sarakkeiden luku (Hour / Cons, Hour.1 / Cons.1, ...).
     """
@@ -195,20 +200,27 @@ def build_inserts_for_apartment(df, apartment_index, meter_id):
         print(f"VAROITUS: Apartment{apartment_index} ei löydy ({hour_col}, {cons_col})")
         return []
 
-    inserts = []
-    for ts, kwh in zip(df[hour_col], df[cons_col]):
+    return build_series_rows(df, hour_col, cons_col, meter_id, reading_type, "wh_import")
+
+
+def build_series_rows(df, hour_col, value_col, meter_id, reading_type, channel):
+    """Excel timestamps are UTC; explicit offsets are converted to naive UTC."""
+    rows = []
+    for index, (ts, kwh) in enumerate(zip(df[hour_col], df[value_col])):
+        # The legacy workbook may contain a second header in its first row.
+        if (index == 0 and isinstance(ts, str)
+                and "hour" in ts.casefold()):
+            continue
         if pd.isna(ts) or pd.isna(kwh):
             continue
-
-        if isinstance(ts, str):
-            ts = datetime.fromisoformat(ts)
-
-        wh_import = float(kwh) * 1000.0
-
-        inserts.append((meter_id, ts, wh_import, 0.0, 0.0))
-
-    print(f"  Apartment{apartment_index}: {len(inserts)} riviä")
-    return inserts
+        if not isinstance(ts, (str, datetime)):
+            raise ValueError(f"Invalid timestamp in {hour_col}, row {index + 2}: {ts!r}")
+        timestamp = pd.Timestamp(ts).to_pydatetime()
+        if timestamp.tzinfo is not None:
+            timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+        rows.append(dict(meter_id=meter_id, timestamp=timestamp,
+                         reading_type=reading_type, **{channel: float(kwh) * 1000.0}))
+    return rows
 
 
 def find_column_by_value(df, text_substring_list):
@@ -217,6 +229,8 @@ def find_column_by_value(df, text_substring_list):
     (case-insensitive, trimattuna).
     Palauttaa sarakkeen nimen tai None.
     """
+    if df.empty:
+        return None
     for col in df.columns:
         first_val = df[col].iloc[0]
         if isinstance(first_val, str):
@@ -226,101 +240,33 @@ def find_column_by_value(df, text_substring_list):
     return None
 
 
-def build_common_inserts(df, meter_id):
-    """
-    Common (Kiinteistö) -mittaukset: Cons Käyttö.
-    Etsii sarakkeet sekä otsikon että ensimmäisen soluarvon perusteella.
-    """
+def find_column(df, words):
+    for col in df.columns:
+        if all(word.casefold() in str(col).casefold() for word in words):
+            return col
+    return find_column_by_value(df, words)
 
-    # 1) yritetään otsikon perusteella
-    hour_cols = [c for c in df.columns if "Kiinteistö" in c and "Hour" in c]
-    cons_cols = [c for c in df.columns if "Cons" in c and "Käyttö" in c]
 
-    # 2) jos ei löydy, etsitään ensimmäisestä rivistä solun arvon perusteella
-    if not hour_cols:
-        col = find_column_by_value(df, ["Kiinteistö", "Hour"])
-        if col:
-            hour_cols = [col]
-
-    if not cons_cols:
-        col = find_column_by_value(df, ["Cons", "Käyttö"])
-        if col:
-            cons_cols = [col]
-
-    # 3) jos EI vieläkään löydy, ohitetaan Common
-    if not hour_cols or not cons_cols:
-        print("VAROITUS: Common-sarakkeita ei löytynyt (ei otsikon eikä soluarvon perusteella). Ohitetaan Common.")
+def build_common_inserts(df, meter_id, reading_type="BN03"):
+    """Datahub consumption and surplus both belong to COMMON_MAIN."""
+    hour = find_column(df, ["Kiinteistö", "Hour"])
+    if hour is None:
+        print("VAROITUS: Kiinteistön aikaleimasarake puuttuu. Ohitetaan Common.")
         return []
-
-    hour_col = hour_cols[0]
-    cons_col = cons_cols[0]
-
-    print(f"  Common: käytetään sarakkeita '{hour_col}' ja '{cons_col}'")
-
-    inserts = []
-    for ts, kwh in zip(df[hour_col], df[cons_col]):
-        if pd.isna(ts) or pd.isna(kwh):
-            continue
-
-        if isinstance(ts, str):
-            ts = datetime.fromisoformat(ts)
-
-        wh_import = float(kwh) * 1000.0
-        inserts.append((meter_id, ts, wh_import, 0.0, 0.0))
-
-    print(f"  Common: {len(inserts)} riviä")
-    return inserts
+    rows = []
+    for words, channel in [(["Cons", "Käyttö"], "wh_import"),
+                           (["Prod", "Tuotanto"], "wh_export")]:
+        column = find_column(df, words)
+        if column is not None:
+            rows.extend(build_series_rows(df, hour, column, meter_id, reading_type, channel))
+    return rows
 
 
-def build_pv_inserts(df, meter_id):
-    """
-    PV_MAIN (Prod Tuotanto) -mittaukset.
-    Käytetään samaa aikaleimasaraketta kuin Commonissa (Kiinteistö Hour),
-    ja sarake 'Prod Tuotanto' tai sen variantti.
-    """
-
-    # Aikaleima: sama logiikka kuin commonissa
-    hour_cols = [c for c in df.columns if "Kiinteistö" in c and "Hour" in c]
-    if not hour_cols:
-        col = find_column_by_value(df, ["Kiinteistö", "Hour"])
-        if col:
-            hour_cols = [col]
-    if not hour_cols:
-        print("VAROITUS: PV:lle ei löytynyt aikaleimasaraketta (Kiinteistö Hour). Ohitetaan PV.")
+def build_pv_inserts(df, meter_id, hour_col=None, production_col=None):
+    """Only an explicitly selected internal submeter column is gross PV."""
+    if hour_col is None or production_col is None:
         return []
-
-    hour_col = hour_cols[0]
-
-    # Prod Tuotanto -sarake otsikon perusteella
-    prod_cols = [c for c in df.columns if "Prod" in c and "Tuotanto" in c]
-    if not prod_cols:
-        col = find_column_by_value(df, ["Prod", "Tuotanto"])
-        if col:
-            prod_cols = [col]
-
-    if not prod_cols:
-        print("VAROITUS: PV:lle ei löytynyt 'Prod Tuotanto' -sarake. Ohitetaan PV.")
-        return []
-
-    prod_col = prod_cols[0]
-
-    print(f"  PV: käytetään sarakkeita '{hour_col}' ja '{prod_col}'")
-
-    inserts = []
-    for ts, kwh in zip(df[hour_col], df[prod_col]):
-        if pd.isna(ts) or pd.isna(kwh):
-            continue
-
-        if isinstance(ts, str):
-            ts = datetime.fromisoformat(ts)
-
-        wh_prod = float(kwh) * 1000.0  # kWh -> Wh
-
-        # wh_import = 0, wh_export = 0, wh_prod = ylituotanto
-        inserts.append((meter_id, ts, 0.0, 0.0, wh_prod))
-
-    print(f"  PV (Prod Tuotanto): {len(inserts)} riviä")
-    return inserts
+    return build_series_rows(df, hour_col, production_col, meter_id, "INTERNAL", "wh_prod")
 
 
 # -------------------------------
@@ -337,63 +283,48 @@ def main():
     num_apartments_str = input("Kuinka monta asuntoa (Apartment1..ApartmentN) [24]: ").strip()
     num_apartments = int(num_apartments_str) if num_apartments_str else 24
 
-    # Lataa Excel
+    if num_apartments < 1:
+        raise ValueError("Asuntojen lukumäärän on oltava positiivinen")
+    reading_type = normalize_reading_type(
+        input("Datahub-sarjatyyppi [BN03] (BN01/BN02/BN03): ").strip() or "BN03"
+    )
+    if reading_type == "INTERNAL":
+        raise ValueError("Asuntojen ja kiinteistön Datahub-sarjan on oltava BN01, BN02 tai BN03")
     df = load_excel(excel_path, sheet_name)
+    print("Aikaleimat tulkitaan UTC-ajaksi. Aikavyöhykkeen sisältävät ajat muunnetaan UTC:ksi.")
+    print("Prod Tuotanto tuodaan COMMON_MAIN-mittarin verkkovientinä.")
+    pv_column = input("Sisäisen PV-alamittarin tuotantosarake (tyhjä = ohita): ").strip()
+    pv_hour = input("Sisäisen PV-alamittarin aikaleimasarake: ").strip() if pv_column else None
 
     conn = get_db_connection(db_config)
     cur = conn.cursor()
-
-    all_inserts = []
-
-    # --- APARTMENTS ---
-    print("\n--- APARTMENTS ---")
-    for apt in range(1, num_apartments + 1):
-        meter_id, meter_serial = get_meter_id_for_apartment(cur, apt)
-        print(f"Apartment{apt} → {meter_serial} (meter_id={meter_id})")
-        inserts = build_inserts_for_apartment(df, apt, meter_id)
-        all_inserts.extend(inserts)
-
-    # --- COMMON ---
-    print("\n--- COMMON ---")
-    common_meter_id = get_meter_id_common(cur)
-    if common_meter_id:
-        common_inserts = build_common_inserts(df, common_meter_id)
-        all_inserts.extend(common_inserts)
-
-    # --- PV (Prod Tuotanto) ---
-    print("\n--- PV (Prod Tuotanto) ---")
-    pv_meter_id = get_meter_id_pv(cur)
-    if pv_meter_id:
-        pv_inserts = build_pv_inserts(df, pv_meter_id)
-        all_inserts.extend(pv_inserts)
-
-    print(f"\nYhteensä lisättäviä mittauksia: {len(all_inserts)}")
-
-    if not all_inserts:
-        print("Ei lisättävää.")
+    try:
+        rows = []
+        for apt in range(1, num_apartments + 1):
+            meter_id, _ = get_meter_id_for_apartment(cur, apt)
+            rows.extend(build_inserts_for_apartment(df, apt, meter_id, reading_type))
+        common_id = get_meter_id_common(cur)
+        if common_id is not None:
+            rows.extend(build_common_inserts(df, common_id, reading_type))
+        if pv_column:
+            pv_id = get_meter_id_pv(cur)
+            if pv_id is None:
+                raise RuntimeError("PV_MAIN-mittari roolilla pv_raw puuttuu")
+            rows.extend(build_pv_inserts(df, pv_id, pv_hour, pv_column))
+        print(f"Lisättäviä/päivitettäviä arvoja: {len(rows)}; Datahub-sarja: {reading_type}")
+        if not rows or input("Kirjoitetaanko kantaan? [y/N]: ").strip().lower() != "y":
+            print("Ei kirjoitettu.")
+            return
+        for row in rows:
+            upsert_measurement(cur, **row)
+        conn.commit()
+        print("Valmis! Mittaukset tallennettu.")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
         cur.close()
         conn.close()
-        return
-
-    confirm = input("Kirjoitetaanko kantaan? [y/N]: ").strip().lower()
-    if confirm != "y":
-        print("Peruutettu.")
-        cur.close()
-        conn.close()
-        return
-
-    cur.executemany(
-        """
-        INSERT INTO measurements (meter_id, ts, wh_import, wh_export, wh_prod)
-        VALUES (%s, %s, %s, %s, %s);
-        """,
-        all_inserts
-    )
-    conn.commit()
-
-    print("\nValmis! Data kirjoitettu measurements-tauluun.")
-    cur.close()
-    conn.close()
 
 
 if __name__ == "__main__":
