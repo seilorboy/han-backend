@@ -1,183 +1,386 @@
-<h1>Energy Meter Reading &amp; Data Logging System</h1>
+# Energy Meter Reading, Data Logging and Visualization
 
-<p>
-This project provides a complete solution for reading electric energy consumption from energy meters han/p1-port and storing the data in an SQL database.
-</p>
+This project collects, stores, processes and visualizes electricity data for
+Valkamakatu 11.
 
-<p>
-It consists of two main components:
-</p>
+The system combines:
 
-<ol>
-  <li>Han-port readenr firmware for the Arduino Uno R4 WiFi board</li>
-  <li>Docker-based backend datastorage running on Linux Debian</li>
-</ol>
+- HAN/P1 meter reading with an Arduino Uno R4 WiFi
+- a Flask REST API
+- MySQL/MariaDB storage
+- Docker-based deployment on Debian Linux
+- a Chart.js consumption view
+- a Plotly Sankey view for daily energy flows and annual totals
 
-<hr>
+## System overview
 
-<h2>Overview</h2>
+The project currently handles two data paths.
 
-<p>
-The Arduino Uno R4 WiFi acts as a frontend device that communicates with electric energy meters and sends the readings to the backend API.
-The backend application receives the measurements and stores them in an SQL database for further processing, analytics, or visualization.
-</p>
+### HAN/P1 readings
 
-<hr>
+An Arduino Uno R4 WiFi reads a compatible electricity meter through its HAN/P1
+port and sends readings to the Flask backend with HTTP POST requests. These
+readings are stored in the `han_energy` table.
 
-<h2>Features</h2>
+The backend can return the latest reading and aggregate readings into
+15-minute intervals for the consumption chart.
 
-<ul>
-  <li>Reads electric energy consumption from supported meters</li>
-  <li>Stores readings in an SQL database (MySQL/MariaDB)</li>
-  <li>REST-style API endpoint for receiving measurement data</li>
-  <li>Arduino sketch for the Uno R4 WiFi</li>
-  <li>Docker-based backend and database services</li>
-  <li>Works on Linux Debian</li>
-  <li>Modular structure for future expansions (logging, dashboards, analytics)</li>
-</ul>
+### Valkamakatu 11 energy data
 
-<hr>
+Hourly energy series are stored in the `measurements` table and connected to
+meter metadata in the `meters` table. This dataset includes:
 
-<h2>Components</h2>
+- the common-area connection point
+- 24 apartment connection points
+- an internal photovoltaic production submeter
 
-<h3>1. Arduino Firmware</h3>
+The data is used to generate a daily Sankey diagram and annual Grid, Export and
+PV totals.
 
-<p>
-Folder: <code>arduino/</code>
-</p>
+## Components
 
-<ul>
-  <li>Written for Arduino Uno R4 WiFi</li>
-  <li>Reads consumption data from HAN-port</li>
-  <li>Sends data via HTTP POST to the backend API</li>
-  <li>Includes WiFi setup and basic error handling</li>
-</ul>
+### Arduino firmware
 
-<h3>2. Docker Backend</h3>
+Folder: `arduino/`
 
-<p>
-Folder: <code>docker/</code>
-</p>
+The firmware:
 
-<p>
-Contains the following:
-</p>
+- runs on Arduino Uno R4 WiFi
+- reads a compatible HAN/P1 interface
+- connects to the backend over WiFi
+- sends readings with HTTP POST requests
+- provides basic connection and transmission error handling
 
-<ul>
-  <li>Backend API (Flask or similar)</li>
-  <li>MySQL/MariaDB database</li>
-  <li>Optional Nginx or additional services</li>
-</ul>
+### Docker backend
 
-<p>Start the system with:</p>
+Folder: `docker/`
 
-<pre><code>docker compose up -d
-</code></pre>
+The Docker deployment contains the Flask backend and a MySQL/MariaDB database.
+Depending on the deployment, a reverse proxy can expose the API and static web
+pages.
 
-<hr>
+Start the configured services with:
 
-<h2>Requirements</h2>
-
-<h3>Hardware</h3>
-
-<ul>
-  <li>Arduino Uno R4 WiFi</li>
-  <li>Electric energy meter with a compatible interface</li>
-  <li>Linux Debian host or virtual machine</li>
-  <li>Network connection (WiFi + LAN)</li>
-</ul>
-
-<h3>Software</h3>
-
-<ul>
-  <li>Docker and Docker Compose</li>
-  <li>Arduino IDE 2.x</li>
-  <li>Python 3.x (optional for development)</li>
-</ul>
-
-<hr>
-
-<h2>Getting Started</h2>
-
-<h3>1. Flash the Arduino</h3>
-
-<ol>
-  <li>Open Arduino IDE</li>
-  <li>Load the sketch from the <code>arduino/</code> directory</li>
-  <li>Configure WiFi credentials</li>
-  <li>Upload the firmware to the Arduino Uno R4 WiFi</li>
-</ol>
-
-<h3>2. Start the Backend on Debian</h3>
-
-<p>Clone the repository and start Docker services:</p>
-
-<pre><code>git clone https://github.com/&lt;your-repo&gt;.git
-cd docker
+```bash
 docker compose up -d
-</code></pre>
+```
 
-<p>The API becomes available at:</p>
+Rebuild the backend after Python source changes:
 
-<pre><code>http://&lt;server-ip&gt;:8080/
-</code></pre>
+```bash
+docker compose up -d --build
+```
 
-<hr>
+Inspect service status and backend logs:
 
-<h2>Database Structure</h2>
+```bash
+docker compose ps
+docker compose logs -f
+```
 
-<p>A new database Valkamakatu 11 added. It is having it's own setup file.</p>
+## Configuration
 
-<p>A typical measurement table:</p>
+The Flask backend reads its database configuration from environment variables:
 
-<table>
-  <thead>
-    <tr>
-      <th>Column</th>
-      <th>Type</th>
-      <th>Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>id</code></td>
-      <td>INT PK</td>
-      <td>Unique identifier</td>
-    </tr>
-    <tr>
-      <td><code>ts</code></td>
-      <td>TIMESTAMP</td>
-      <td>Timestamp of the measurement</td>
-    </tr>
-    <tr>
-      <td><code>value_wh</code></td>
-      <td>INT</td>
-      <td>Measured energy in watt-hours</td>
-    </tr>
-    <tr>
-      <td><code>meter_id</code></td>
-      <td>INT</td>
-      <td>Foreign key to the meters table</td>
-    </tr>
-  </tbody>
-</table>
+| Variable | Description |
+| --- | --- |
+| `DB_HOST` | Database hostname or Compose service name |
+| `DB_USER` | Database user |
+| `DB_PASSWORD` | Database password |
+| `DB_NAME` | Database name, for example the Valkamakatu 11 database |
 
-<hr>
+Keep credentials in the deployment environment or an untracked `.env` file.
+Do not commit real passwords to the repository.
 
-<h2>Future Improvements</h2>
+## Web views
 
-<ul>
-  <li>Web dashboard for consumption visualization</li>
-  <li>Support for additional meter types</li>
-  <li>MQTT telemetry support</li>
-  <li>Automatic firmware updates</li>
-  <li>Detailed analytics and reporting features</li>
-</ul>
+### Consumption chart
 
-<hr>
+The consumption page uses Chart.js to display readings aggregated into
+15-minute intervals.
 
-<h2>License</h2>
+Relevant backend endpoint:
 
-<p>
-MIT License (or your preferred license)
-</p>
+```text
+GET /api/energy/quarter-hour?date=YYYY-MM-DD
+```
+
+### Sankey diagram
+
+The Sankey page uses Plotly and loads its data from:
+
+```text
+GET /api/sankey?date=YYYY-MM-DD
+```
+
+The response contains:
+
+- `nodes` and `links` for the selected day
+- `meta` with daily totals
+- `annual` with totals for the selected calendar year
+
+Example response structure:
+
+```json
+{
+  "date": "2025-09-01",
+  "nodes": ["PV", "Grid", "Export", "Common", "APT1"],
+  "links": [],
+  "meta": {
+    "pv_kwh": 0.0,
+    "common_load_kwh": 0.0,
+    "apartments_load_kwh": 0.0,
+    "grid_to_load_kwh": 0.0,
+    "pv_export_kwh": 0.0
+  },
+  "annual": {
+    "year": 2025,
+    "grid_kwh": 0.0,
+    "export_kwh": 0.0,
+    "pv_kwh": 0.0
+  }
+}
+```
+
+## Energy data model
+
+### `meters`
+
+The `meters` table identifies each energy series.
+
+| Column | Purpose |
+| --- | --- |
+| `id` | Primary key |
+| `meter_serial` | Application-level meter identifier |
+| `usage_point_no` | Usage-point identifier, when available |
+| `role` | `load`, `pv_raw` or `consumption_raw` |
+| `apartment_id` | Apartment reference for apartment meters |
+| `active` | Whether the meter is currently active |
+| `created_at` | Row creation time |
+
+The currently configured logical meters are:
+
+- `PV_MAIN`: internal PV production submeter, role `pv_raw`
+- `COMMON_MAIN`: common-area connection point, role `load`
+- `APT1` through `APT24`: apartment connection points, role `load`
+
+Future internal consumption submeters use role `consumption_raw`. Their measured
+interval consumption is stored in `wh_consumption` with reading type
+`INTERNAL`. Internal submeter consumption is not automatically counted as Grid
+energy because it may measure a load already included in a Datahub load series.
+
+`PV_MAIN` is an internal property submeter. It is not a distribution system
+operator's Datahub metering series and must not be labelled BN01.
+
+### `measurements`
+
+Each row represents energy for one measurement interval. Values are stored in
+watt-hours.
+
+| Column | Purpose |
+| --- | --- |
+| `id` | Primary key |
+| `meter_id` | Foreign key to `meters.id` |
+| `ts` | Measurement interval timestamp |
+| `reading_type` | `BN01`, `BN02`, `BN03` or `INTERNAL` |
+| `wh_import` | Imported energy during the interval, Wh |
+| `wh_export` | Exported energy during the interval, Wh |
+| `wh_prod` | Production measured by an internal submeter, Wh |
+| `wh_consumption` | Consumption measured by an internal submeter, Wh |
+| `created_at` | Database insertion time |
+
+Energy totals are calculated by summing interval values and dividing by 1000:
+
+```text
+kWh = SUM(Wh) / 1000
+```
+
+These values are interval energies, not cumulative meter-register readings.
+
+### `han_energy`
+
+The `han_energy` table stores readings received through the generic HAN API.
+
+| Column | Purpose |
+| --- | --- |
+| `id` | Primary key |
+| `ts` | Reading timestamp |
+| `energy_kwh` | Received energy reading |
+
+This table is separate from the Valkamakatu 11 `meters` and `measurements`
+model.
+
+## Datahub and energy-community semantics
+
+Datahub series are stored separately by reading type:
+
+- BN01 means a metered series
+- BN02 means a netted series
+- BN03 means an energy-community series after community credit allocation
+
+The unique measurement key is `(meter_id, ts, reading_type)`. It allows BN01,
+BN02 and BN03 values for the same connection point and interval to coexist.
+
+The apartment BN03 `wh_import` values are final imported-energy values. The
+solar-energy credit allocated to each community member has already been
+deducted from them.
+
+`COMMON_MAIN.wh_import` contains the final imported energy for the common-area
+connection point. `COMMON_MAIN.wh_export` contains the surplus sold to the grid
+after energy-community credit allocation.
+
+`PV_MAIN` with reading type `INTERNAL` and column `wh_prod` contains total PV
+production measured by the property's own production submeter.
+
+The application therefore calculates the requested totals as follows:
+
+```text
+Grid = SUM(BN03 wh_import for all role='load' meters) / 1000
+
+Export = SUM(COMMON_MAIN BN03 wh_export) / 1000
+
+PV = SUM(PV_MAIN INTERNAL wh_prod) / 1000
+```
+
+PV production must not be subtracted from the load meters again. Doing so would
+apply the energy-community credit twice and understate Grid energy.
+
+For every interval, the Sankey PV split is calculated as follows:
+
+```text
+PV used in common areas = PV_MAIN INTERNAL production - COMMON_MAIN BN02 production
+
+PV used by apartments = COMMON_MAIN BN02 production - COMMON_MAIN BN03 production
+
+Export = COMMON_MAIN BN03 production
+```
+
+The apartment share is displayed as an estimate using an equal allocation of
+`1/24`. Exact apartment-level allocation cannot be proven without the members'
+own paired series. If a BN02 value is missing, the application does not invent
+a split; it sends that interval's remainder to the `CommunityUse` fallback node
+and labels it as unallocated PV.
+
+## API
+
+### Submit a HAN reading
+
+```text
+POST /api/energy
+Content-Type: application/json
+```
+
+Example request body:
+
+```json
+{
+  "energy_kwh": 43569.76
+}
+```
+
+### Get the latest HAN reading
+
+```text
+GET /api/energy/latest
+```
+
+### Get 15-minute consumption values
+
+```text
+GET /api/energy/quarter-hour?date=YYYY-MM-DD
+```
+
+### Get daily Sankey data and annual totals
+
+```text
+GET /api/sankey?date=YYYY-MM-DD
+```
+
+Test the Sankey endpoint locally with:
+
+```bash
+curl -s "http://localhost:5000/api/sankey?date=2025-09-01" \
+  | python3 -m json.tool
+```
+
+The externally exposed port can differ when Docker Compose or a reverse proxy
+maps the Flask service to another address.
+
+## Time zones
+
+Database measurement timestamps are handled as UTC by the backend. User-selected
+dates are interpreted in the `Europe/Helsinki` time zone and converted to UTC
+query boundaries. This accounts for both standard time and daylight-saving
+time.
+
+The Python environment or operating-system image must provide IANA time-zone
+data for `Europe/Helsinki`. If it does not, install the Python `tzdata` package
+or add time-zone data to the container image.
+
+## Requirements
+
+### Hardware
+
+- Arduino Uno R4 WiFi
+- compatible electricity meter with a HAN/P1 interface
+- Debian Linux host or virtual machine
+- network connectivity between the reader and backend
+
+### Software
+
+- Docker Engine
+- Docker Compose
+- Arduino IDE 2.x for firmware development
+- Python 3 with Flask, MySQL Connector and time-zone data in the backend image
+- a modern web browser with access to the configured Chart.js and Plotly CDN
+  resources
+
+## Development and verification
+
+After backend changes:
+
+```bash
+docker compose up -d --build
+docker compose logs -f
+```
+
+Verify the database services and inspect available data when necessary:
+
+```sql
+SELECT
+    m.meter_serial,
+    MIN(ms.ts) AS first_measurement,
+    MAX(ms.ts) AS last_measurement,
+    COUNT(*) AS measurement_count
+FROM measurements ms
+JOIN meters m ON m.id = ms.meter_id
+GROUP BY m.id, m.meter_serial
+ORDER BY m.id;
+```
+
+Check for duplicate measurement intervals:
+
+```sql
+SELECT meter_id, ts, COUNT(*) AS row_count
+FROM measurements
+GROUP BY meter_id, ts
+HAVING COUNT(*) > 1;
+```
+
+## Known limitations and possible improvements
+
+- Import the available BN01, BN02 and BN03 series for all relevant connection
+  points.
+- Store member-specific credit allocations if exact apartment-level PV flows
+  are required instead of the current equal `1/24` estimate.
+- Add automated tests for API responses and energy-balance rules.
+- Add database migrations and explicit uniqueness constraints for measurement
+  intervals.
+- Add authentication and transport security when measurement endpoints are
+  exposed outside a trusted network.
+- Add monitoring, data-quality validation and missing-interval reporting.
+- Add support for additional meter types and measurement resolutions.
+
+## License
+
+Add or update the repository's `LICENSE` file to state the licensing terms.

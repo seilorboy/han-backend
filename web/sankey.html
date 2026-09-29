@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Valkamakatu 11 – Sankey</title>
+
+  <style>
+    #sankeyMeta {
+      margin-bottom: 0.5rem;
+    }
+
+    #sankeyAnnualMeta {
+      margin: 0.5rem 0 1rem;
+      padding: 0.75rem 1rem;
+      background: #f5f7fa;
+      border-left: 4px solid #508cdc;
+      font-weight: 600;
+    }
+
+    #sankeyChart {
+      width: 100%;
+      height: 520px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Valkamakatu 11 – Sankey</h1>
+
+  <label for="sankeyDate">Päivä:</label>
+  <input type="date" id="sankeyDate">
+  <button type="button" id="sankeyLoadBtn">Näytä</button>
+
+  <p id="sankeyMeta"></p>
+  <p id="sankeyAnnualMeta"></p>
+
+  <div id="sankeyChart"></div>
+
+  <!-- Plotly -->
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.27.0/plotly.min.js"></script>
+
+  <!-- Oma koodi -->
+  <script src="/sankey.js"></script>
+</body>
+</html>
