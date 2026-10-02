@@ -377,6 +377,26 @@ def calculate_sankey_data(start_utc_naive, end_utc_naive):
     }
 
 
+def annual_pv_split(intervals):
+    """Do not present partial/invalid annual PV allocations as complete savings."""
+    common = apartments = 0.0
+    complete = True
+    for interval in intervals:
+        pv, bn02, bn03 = (interval[key] for key in ("pv", "bn02", "bn03"))
+        if pv == 0 and bn03 == 0 and bn02 in (None, 0):
+            continue
+        if any(value is None for value in (pv, bn02, bn03)) or not 0 <= bn03 <= bn02 <= pv:
+            complete = False
+            continue
+        common += pv - bn02
+        apartments += bn02 - bn03
+    return {
+        "common_kwh": round(common / 1000, 2) if complete else None,
+        "apartments_kwh": round(apartments / 1000, 2) if complete else None,
+        "complete": complete,
+    }
+
+
 def calculate_annual_totals(start_utc_naive, end_utc_naive):
     """
     Laskee valitun kalenterivuoden Grid-, Export- ja PV-summat.
@@ -390,6 +410,10 @@ def calculate_annual_totals(start_utc_naive, end_utc_naive):
     try:
         query = """
             SELECT
+                COALESCE(SUM(CASE WHEN m.meter_serial = 'COMMON_MAIN'
+                    AND ms.reading_type = 'BN03' THEN ms.wh_import ELSE 0 END), 0) AS common_grid_wh,
+                COALESCE(SUM(CASE WHEN m.role = 'load' AND m.meter_serial REGEXP '^APT[0-9]+$'
+                    AND ms.reading_type = 'BN03' THEN ms.wh_import ELSE 0 END), 0) AS apartments_grid_wh,
                 COALESCE(SUM(
                     CASE
                         WHEN m.role = 'load'
@@ -434,11 +458,37 @@ def calculate_annual_totals(start_utc_naive, end_utc_naive):
 
         cur.execute(query, (start_utc_naive, end_utc_naive))
         row = cur.fetchone() or {}
+        # Match PV and common exports by interval before calculating the split.
+        cur.execute("""
+            SELECT ms.ts,
+                SUM(CASE WHEN m.meter_serial = 'PV_MAIN' AND ms.reading_type = 'INTERNAL'
+                    THEN ms.wh_prod END) AS pv,
+                SUM(CASE WHEN m.meter_serial = 'COMMON_MAIN' AND ms.reading_type = 'BN02'
+                    THEN ms.wh_export END) AS bn02,
+                SUM(CASE WHEN m.meter_serial = 'COMMON_MAIN' AND ms.reading_type = 'BN03'
+                    THEN ms.wh_export END) AS bn03
+            FROM measurements ms JOIN meters m ON m.id = ms.meter_id
+            WHERE ms.ts >= %s AND ms.ts < %s
+              AND m.meter_serial IN ('PV_MAIN', 'COMMON_MAIN')
+            GROUP BY ms.ts
+        """, (start_utc_naive, end_utc_naive))
+        split = annual_pv_split(cur.fetchall())
     finally:
         cur.close()
         conn.close()
 
     return {
+        "common": {
+            "grid_kwh": round(float(row.get("common_grid_wh") or 0) / 1000, 2),
+            "self_used_pv_kwh": split["common_kwh"],
+            "export_kwh": round(float(row.get("export_wh") or 0) / 1000, 2),
+        },
+        "apartments": {
+            "grid_kwh": round(float(row.get("apartments_grid_wh") or 0) / 1000, 2),
+            "self_used_pv_kwh": split["apartments_kwh"],
+            "export_kwh": 0.0,
+        },
+        "pv_split_complete": split["complete"],
         "grid_kwh": round(float(row.get("grid_wh") or 0) / 1000.0, 2),
         "export_kwh": round(float(row.get("export_wh") or 0) / 1000.0, 2),
         "pv_kwh": round(float(row.get("pv_wh") or 0) / 1000.0, 2),
