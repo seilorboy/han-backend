@@ -209,12 +209,24 @@ async function loadSankey(dateStr) {
   }
 }
 
+function showSummary(period) {
+  const annual = period === "annual";
+  document.getElementById("dailySummary").hidden = annual;
+  document.getElementById("annualPrices").hidden = !annual;
+  document.getElementById("showDaily").setAttribute("aria-pressed", String(!annual));
+  document.getElementById("showAnnual").setAttribute("aria-pressed", String(annual));
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoaded, asetetaan painike ja oletuspäivä");
 
   const dateInput = document.getElementById("sankeyDate");
   const button = document.getElementById("sankeyLoadBtn");
   const defaultDate = "2025-09-01";
+
+  document.getElementById("showDaily").addEventListener("click", () => showSummary("daily"));
+  document.getElementById("showAnnual").addEventListener("click", () => showSummary("annual"));
+  showSummary("daily");
 
   if (dateInput) dateInput.value = defaultDate;
 

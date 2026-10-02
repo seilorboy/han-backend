@@ -19,6 +19,13 @@
       font-weight: 600;
     }
 
+    [hidden] { display: none !important; }
+    .summary-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+    .summary-buttons button { padding: 0.6rem 1rem; border: 1px solid #508cdc;
+      border-radius: 4px; background: white; color: #234f88; cursor: pointer; }
+    .summary-buttons button[aria-pressed="true"] { background: #234f88; color: white; }
+    .summary-buttons button:focus-visible { outline: 3px solid #e5a000; outline-offset: 2px; }
+
     .price-controls { display: flex; flex-wrap: wrap; gap: 1rem 2rem; }
     .price-controls label { display: block; }
     .price-controls input { width: min(100%, 320px); }
@@ -42,10 +49,16 @@
   <input type="date" id="sankeyDate">
   <button type="button" id="sankeyLoadBtn">Näytä</button>
 
-  <p id="sankeyMeta"></p>
-  <p id="sankeyAnnualMeta"></p>
+  <div class="summary-buttons" role="group" aria-label="Näytettävät yhteenvetotiedot">
+    <button type="button" id="showDaily" aria-controls="dailySummary" aria-pressed="true">Vuorokausitiedot</button>
+    <button type="button" id="showAnnual" aria-controls="annualPrices" aria-pressed="false">Vuositiedot</button>
+  </div>
 
-  <section id="annualPrices" aria-labelledby="annualPricesTitle">
+  <section id="dailySummary" aria-label="Vuorokausitiedot">
+    <p id="sankeyMeta"></p>
+  </section>
+
+  <section id="annualPrices" aria-labelledby="annualPricesTitle" hidden>
     <h2 id="annualPricesTitle">Vuosienergian arvo</h2>
     <div class="price-controls">
       <div>
@@ -63,6 +76,7 @@
     <div class="annual-groups" aria-live="polite">
       <section class="annual-group">
         <h3>Yhteiset tilat (Common)</h3>
+        <p id="sankeyAnnualMeta"></p>
         <dl>
           <dt>Ostosähkö ja kustannus</dt><dd id="commonPurchaseCost">–</dd>
           <dt>Itse käytetty aurinkosähkö ja säästö</dt><dd id="commonSolarSavings">–</dd>
