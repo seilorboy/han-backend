@@ -56,11 +56,41 @@ function renderDailyMeta(data) {
       : "");
 }
 
+let currentAnnual = null;
+const euroFormatter = new Intl.NumberFormat("fi-FI", { style: "currency", currency: "EUR" });
+const priceFormatter = new Intl.NumberFormat("fi-FI", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function annualEnergy(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function renderAnnualPrices() {
+  const purchase = Number(document.getElementById("purchasePrice").value);
+  const sale = Number(document.getElementById("salePrice").value);
+  document.getElementById("purchasePriceValue").textContent = priceFormatter.format(purchase) + " snt/kWh";
+  document.getElementById("salePriceValue").textContent = priceFormatter.format(sale) + " snt/kWh";
+  const grid = annualEnergy(currentAnnual?.grid_kwh);
+  const exported = annualEnergy(currentAnnual?.export_kwh);
+  const pv = annualEnergy(currentAnnual?.pv_kwh);
+  const selfUsed = pv !== null && exported !== null && pv >= exported ? pv - exported : null;
+  const show = (id, energy, price) => {
+    document.getElementById(id).textContent = energy === null ? "–" :
+      euroFormatter.format(energy * price / 100) + " (" + formatKwh(energy) + " kWh)";
+  };
+  show("annualPurchaseCost", grid, purchase);
+  show("annualSolarSavings", selfUsed, purchase);
+  show("annualSaleCredit", exported, sale);
+}
+
 function renderAnnualMeta(data) {
   const annualEl = document.getElementById("sankeyAnnualMeta");
   if (!annualEl) return;
 
   const annual = data.annual;
+  currentAnnual = annual || null;
+  renderAnnualPrices();
 
   if (!annual) {
     annualEl.textContent = "Vuositietoja ei ole saatavilla.";
@@ -84,7 +114,12 @@ function renderAnnualMeta(data) {
       : "");
 }
 
+let latestSankeyRequest = 0;
+
 async function loadSankey(dateStr) {
+  const requestId = ++latestSankeyRequest;
+  currentAnnual = null;
+  renderAnnualPrices();
   const metaEl = document.getElementById("sankeyMeta");
   const annualEl = document.getElementById("sankeyAnnualMeta");
 
@@ -95,6 +130,7 @@ async function loadSankey(dateStr) {
     console.log("Fetch:", url);
 
     const resp = await fetch(url);
+    if (requestId !== latestSankeyRequest) return;
     console.log("HTTP status:", resp.status);
 
     if (!resp.ok) {
@@ -105,6 +141,7 @@ async function loadSankey(dateStr) {
     }
 
     const data = await resp.json();
+    if (requestId !== latestSankeyRequest) return;
     console.log("Saatiin data:", data);
 
     if (!Array.isArray(data.nodes) || !Array.isArray(data.links)) {
@@ -171,6 +208,9 @@ async function loadSankey(dateStr) {
 
     Plotly.react(chartEl, [trace], layout, { responsive: true });
   } catch (err) {
+    if (requestId !== latestSankeyRequest) return;
+    currentAnnual = null;
+    renderAnnualPrices();
     console.error("Poikkeus loadSankey-funktiossa:", err);
     if (metaEl) metaEl.textContent = "Virhe haettaessa Sankey-dataa.";
     if (annualEl) annualEl.textContent = "";
@@ -197,6 +237,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
       loadSankey(date);
     });
+  }
+
+  for (const id of ["purchasePrice", "salePrice"]) {
+    document.getElementById(id).addEventListener("input", renderAnnualPrices);
   }
 
   loadSankey(defaultDate);

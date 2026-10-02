@@ -367,6 +367,108 @@ GROUP BY meter_id, ts
 HAVING COUNT(*) > 1;
 ```
 
+## Testing Sankey with synthetic BN02 data
+
+Use `tools/generate_bn02_test_data.py` to generate temporary BN02 series for
+one day when real BN02 data is unavailable. This experiment assumes that the
+common areas use no PV directly and divides the remaining PV equally between
+24 apartments. It does not reconstruct actual Datahub measurements.
+
+For each measurement interval, the script calculates:
+
+```text
+COMMON_MAIN BN02 export = PV_MAIN INTERNAL production
+COMMON_MAIN BN02 import = COMMON_MAIN BN03 import
+Apartment PV share = (PV_MAIN INTERNAL production - COMMON_MAIN BN03 export) / 24
+Apartment BN02 import = apartment BN03 import + apartment PV share
+Apartment BN02 export = apartment BN03 export
+```
+
+`PV_MAIN` stays in the `INTERNAL` series. Existing measurements are preserved.
+The current Sankey uses the common-area BN02 export to calculate the PV split;
+it does not use the apartment BN02 series for the displayed allocation.
+
+### Prerequisites
+
+- Apply the measurement-series migration described in
+  [the migration instructions](docs/IMPLEMENTATION.md) first.
+- Update the server checkout so it contains the test-data script. Run the
+  commands below from the repository root with the database service running
+  and the API image built with its database environment configured.
+- The selected day must have matching source intervals for active `PV_MAIN`,
+  `COMMON_MAIN` and `APT1`–`APT24`: internal PV production and BN03 load series.
+  The script rejects missing source intervals, existing BN02 rows in the target
+  series, and common BN03 export greater than PV production.
+
+Dates are interpreted in `Europe/Helsinki`; stored timestamps remain UTC.
+Replace `2025-09-01` in the commands with the day you want to test, including
+in the manifest filename.
+
+### Preview and create test data
+
+Preview the generated row count without writing to the database:
+
+```bash
+mkdir -p data/bn02-test
+
+docker compose run --rm --no-deps \
+  -v "$PWD/tools:/tools:ro" \
+  -v "$PWD/data/bn02-test:/test-data" \
+  api python /tools/generate_bn02_test_data.py \
+  --date 2025-09-01
+```
+
+If the preview succeeds, create the test rows with `--apply`:
+
+```bash
+docker compose run --rm --no-deps \
+  -v "$PWD/tools:/tools:ro" \
+  -v "$PWD/data/bn02-test:/test-data" \
+  api python /tools/generate_bn02_test_data.py \
+  --date 2025-09-01 --apply \
+  --manifest /test-data/2025-09-01.json
+```
+
+The manifest records the inserted row IDs and values. It is saved on the server
+at `data/bn02-test/2025-09-01.json`. **Keep this file until the test rows have
+been removed.** Use a new manifest filename for each experiment; the script
+refuses to overwrite an existing file.
+
+### Check the diagram
+
+Reload `/sankey.html` and select the test date. No service restart is needed.
+Expected results for the selected day:
+
+- PV used in common areas is zero under this test assumption.
+- PV used by apartments equals total PV minus common BN03 export and is split
+  equally among the 24 apartments.
+- The unallocated PV flow disappears for the complete test intervals.
+- Grid and Export totals remain unchanged.
+
+The UI does not automatically label the generated series as test data. If real
+BN01 values exist, the synthetic BN02 values may trigger BN01/BN02 consistency
+warnings in backend logs.
+
+### Remove test data
+
+After checking the diagram, remove the generated rows using the saved manifest:
+
+```bash
+docker compose run --rm --no-deps \
+  -v "$PWD/tools:/tools:ro" \
+  -v "$PWD/data/bn02-test:/test-data" \
+  api python /tools/generate_bn02_test_data.py \
+  --undo /test-data/2025-09-01.json --apply
+```
+
+Omit `--apply` to preview the removal; that operation is rolled back. Undo
+removes only the recorded rows and refuses deletion if their values have
+changed. Remove the test series before importing real BN02 data for the same
+day. Reload the diagram afterwards to see the original data again.
+
+See [the detailed test-data notes](docs/BN02_TEST_DATA.md) for additional
+transaction and recovery details.
+
 ## Known limitations and possible improvements
 
 - Import the available BN01, BN02 and BN03 series for all relevant connection
