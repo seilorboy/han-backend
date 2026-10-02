@@ -71,17 +71,19 @@ function renderAnnualPrices() {
   const sale = Number(document.getElementById("salePrice").value);
   document.getElementById("purchasePriceValue").textContent = priceFormatter.format(purchase) + " snt/kWh";
   document.getElementById("salePriceValue").textContent = priceFormatter.format(sale) + " snt/kWh";
-  const grid = annualEnergy(currentAnnual?.grid_kwh);
-  const exported = annualEnergy(currentAnnual?.export_kwh);
-  const pv = annualEnergy(currentAnnual?.pv_kwh);
-  const selfUsed = pv !== null && exported !== null && pv >= exported ? pv - exported : null;
   const show = (id, energy, price) => {
     document.getElementById(id).textContent = energy === null ? "–" :
-      euroFormatter.format(energy * price / 100) + " (" + formatKwh(energy) + " kWh)";
+      formatKwh(energy) + " kWh · " + euroFormatter.format(energy * price / 100);
   };
-  show("annualPurchaseCost", grid, purchase);
-  show("annualSolarSavings", selfUsed, purchase);
-  show("annualSaleCredit", exported, sale);
+  for (const group of ["common", "apartments"]) {
+    const values = currentAnnual?.[group];
+    show(group + "PurchaseCost", annualEnergy(values?.grid_kwh), purchase);
+    show(group + "SolarSavings", annualEnergy(values?.self_used_pv_kwh), purchase);
+    show(group + "SaleCredit", annualEnergy(values?.export_kwh), sale);
+  }
+  document.getElementById("annualSplitNotice").textContent = currentAnnual?.pv_split_complete === false
+    ? "Aurinkosähkön vuosijakoa ja säästöjä ei voida laskea: osasta mittausvälejä puuttuu PV-/BN02-/BN03-tietoja tai niiden arvot ovat ristiriidassa."
+    : "";
 }
 
 function renderAnnualMeta(data) {
@@ -99,19 +101,9 @@ function renderAnnualMeta(data) {
 
   const year = annual.year || String(data.date || "").slice(0, 4);
 
-  // Backend palauttaa jo valmiiksi oikein muodostetut vuosiarvot:
-  // grid_kwh   = kaikkien load-mittareiden BN03 wh_import -summa / 1000
-  // export_kwh = COMMON_MAIN-mittarin BN03 wh_export -summa / 1000
-  // pv_kwh     = PV_MAIN-alamittauksen wh_prod-summa / 1000
-  annualEl.textContent =
-    "Vuosi " + year + "  |  " +
-    "Verkosta ostettu: " + formatKwh(annual.grid_kwh) + " kWh  |  " +
-    "Verkkoon myyty: " + formatKwh(annual.export_kwh) + " kWh  |  " +
-    "Aurinkosähkön tuotto: " + formatKwh(annual.pv_kwh) + " kWh" +
-    (Number(annual.internal_consumption_kwh || 0) > 0
-      ? "  |  Sisäiset kulutusalamittaukset: " +
-        formatKwh(annual.internal_consumption_kwh) + " kWh"
-      : "");
+  annualEl.textContent = "Vuosi " + year + "  |  Aurinkosähkön kokonaistuotanto: " +
+    formatKwh(annual.pv_kwh) + " kWh";
+
 }
 
 let latestSankeyRequest = 0;

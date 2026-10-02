@@ -23,6 +23,8 @@
     .price-controls label { display: block; }
     .price-controls input { width: min(100%, 320px); }
     #annualPrices { padding: 1rem; background: #f5f7fa; }
+    .annual-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+    .annual-group { background: white; padding: 1rem; }
     #annualPrices dt { margin-top: 0.75rem; }
     #annualPrices dd { margin: 0.25rem 0; font-weight: 600; }
 
@@ -56,12 +58,27 @@
       </div>
     </div>
     <p>Arvio valitun vuoden saatavilla olevasta energiasta käyttäen vakiohintoja.
-      Oletushinnat ovat esimerkkejä. Itse käytetty aurinkosähkö = tuotanto − verkkoon myynti.</p>
-    <dl aria-live="polite">
-      <dt>Ostetun sähkön kustannus</dt><dd id="annualPurchaseCost">–</dd>
-      <dt>Itse käytetyn aurinkosähkön säästö</dt><dd id="annualSolarSavings">–</dd>
-      <dt>Myydyn sähkön hyvitys</dt><dd id="annualSaleCredit">–</dd>
-    </dl>
+      Oletushinnat ovat esimerkkejä. Samat hinnat koskevat molempia ryhmiä.</p>
+    <p id="annualSplitNotice"></p>
+    <div class="annual-groups" aria-live="polite">
+      <section class="annual-group">
+        <h3>Yhteiset tilat (Common)</h3>
+        <dl>
+          <dt>Ostosähkö ja kustannus</dt><dd id="commonPurchaseCost">–</dd>
+          <dt>Itse käytetty aurinkosähkö ja säästö</dt><dd id="commonSolarSavings">–</dd>
+          <dt>Verkkoon myynti ja hyvitys (COMMON BN03)</dt><dd id="commonSaleCredit">–</dd>
+        </dl>
+      </section>
+      <section class="annual-group">
+        <h3>Asunnot yhteensä</h3>
+        <dl>
+          <dt>Ostosähkö ja kustannus</dt><dd id="apartmentsPurchaseCost">–</dd>
+          <dt>Asunnoille kohdistettu aurinkosähkö ja säästö</dt><dd id="apartmentsSolarSavings">–</dd>
+          <dt>Verkkoon myynti ja hyvitys</dt><dd id="apartmentsSaleCredit">–</dd>
+        </dl>
+        <p>COMMON BN03 -myynti ja sen hyvitys esitetään yhteisissä tiloissa.</p>
+      </section>
+    </div>
   </section>
 
   <div id="sankeyChart"></div>
