@@ -665,9 +665,12 @@ def sankey():
     Palauttaa yhden päivän Sankey-datan sekä valitun päivän
     kalenterivuoden Grid-, Export- ja PV-yhteenvedon.
 
-    Parametri: ?date=YYYY-MM-DD.
+    Parametrit: ?date=YYYY-MM-DD&period=day|year (oletus day).
     """
 
+    period = request.args.get("period", "day")
+    if period not in ("day", "year"):
+        return jsonify({"error": "Invalid period, use day or year"}), 400
     date_str = request.args.get("date")
 
     if not date_str:
@@ -716,8 +719,8 @@ def sankey():
     )
 
     sankey_data = calculate_sankey_data(
-        day_start_utc_naive,
-        day_end_utc_naive,
+        year_start_utc_naive if period == "year" else day_start_utc_naive,
+        year_end_utc_naive if period == "year" else day_end_utc_naive,
     )
     annual_totals = calculate_annual_totals(
         year_start_utc_naive,
@@ -727,6 +730,7 @@ def sankey():
     return jsonify(
         {
             "date": date_str,
+            "period": period,
             "nodes": sankey_data["nodes"],
             "links": sankey_data["links"],
             "meta": sankey_data["meta"],

@@ -107,8 +107,14 @@ function renderAnnualMeta(data) {
 }
 
 let latestSankeyRequest = 0;
+let selectedPeriod = "day";
 
 async function loadSankey(dateStr) {
+  const period = selectedPeriod;
+  const chartEl = document.getElementById("sankeyChart");
+  const chartTitle = document.getElementById("sankeyChartTitle");
+  chartEl.hidden = true;
+  chartTitle.textContent = "Ladataan kaaviota…";
   const requestId = ++latestSankeyRequest;
   currentAnnual = null;
   renderAnnualPrices();
@@ -118,7 +124,7 @@ async function loadSankey(dateStr) {
   console.log("Ladataan Sankey päivälle:", dateStr);
 
   try {
-    const url = "/api/sankey?date=" + encodeURIComponent(dateStr);
+    const url = "/api/sankey?date=" + encodeURIComponent(dateStr) + "&period=" + period;
     console.log("Fetch:", url);
 
     const resp = await fetch(url);
@@ -126,6 +132,7 @@ async function loadSankey(dateStr) {
     console.log("HTTP status:", resp.status);
 
     if (!resp.ok) {
+      chartTitle.textContent = "Kaavion lataus epäonnistui.";
       const message = "Virhe: " + resp.status + " " + resp.statusText;
       if (metaEl) metaEl.textContent = message;
       if (annualEl) annualEl.textContent = "";
@@ -137,12 +144,13 @@ async function loadSankey(dateStr) {
     console.log("Saatiin data:", data);
 
     if (!Array.isArray(data.nodes) || !Array.isArray(data.links)) {
+      chartTitle.textContent = "Kaavion lataus epäonnistui.";
       if (metaEl) metaEl.textContent = "Virhe: vastauksessa ei ole nodes/link-dataa";
       if (annualEl) annualEl.textContent = "";
       return;
     }
 
-    renderDailyMeta(data);
+    if (period === "day") renderDailyMeta(data);
     renderAnnualMeta(data);
 
     const labels = data.nodes.map(localizeNode);
@@ -198,9 +206,15 @@ async function loadSankey(dateStr) {
       font: { size: 12 }
     };
 
+    chartEl.hidden = false;
+    chartTitle.textContent = period === "year"
+      ? "Vuoden " + dateStr.slice(0, 4) + " energiavirrat (kWh)"
+      : "Päivän " + dateStr + " energiavirrat (kWh)";
     Plotly.react(chartEl, [trace], layout, { responsive: true });
   } catch (err) {
     if (requestId !== latestSankeyRequest) return;
+    chartTitle.textContent = "Kaavion lataus epäonnistui.";
+    chartEl.hidden = true;
     currentAnnual = null;
     renderAnnualPrices();
     console.error("Poikkeus loadSankey-funktiossa:", err);
@@ -209,12 +223,15 @@ async function loadSankey(dateStr) {
   }
 }
 
-function showSummary(period) {
+function showSummary(period, reload = true) {
   const annual = period === "annual";
+  selectedPeriod = annual ? "year" : "day";
   document.getElementById("dailySummary").hidden = annual;
   document.getElementById("annualPrices").hidden = !annual;
   document.getElementById("showDaily").setAttribute("aria-pressed", String(!annual));
   document.getElementById("showAnnual").setAttribute("aria-pressed", String(annual));
+  const date = document.getElementById("sankeyDate").value;
+  if (reload && date) loadSankey(date);
 }
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -226,7 +243,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.getElementById("showDaily").addEventListener("click", () => showSummary("daily"));
   document.getElementById("showAnnual").addEventListener("click", () => showSummary("annual"));
-  showSummary("daily");
+  showSummary("daily", false);
 
   if (dateInput) dateInput.value = defaultDate;
 
