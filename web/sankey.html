@@ -8,7 +8,11 @@
 
   <style>
     #sankeyMeta {
-      margin-bottom: 0.5rem;
+      margin: 0.5rem 0 1rem;
+      padding: 0.75rem 1rem;
+      background: #f5f7fa;
+      border-left: 4px solid #508cdc;
+      font-weight: 600;
     }
 
     #sankeyAnnualMeta {
@@ -29,11 +33,11 @@
     .price-controls { display: flex; flex-wrap: wrap; gap: 1rem 2rem; }
     .price-controls label { display: block; }
     .price-controls input { width: min(100%, 320px); }
-    #annualPrices { padding: 1rem; background: #f5f7fa; }
+    #dailySummary, #annualPrices { padding: 1rem; background: #f5f7fa; }
     .annual-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
     .annual-group { background: white; padding: 1rem; }
-    #annualPrices dt { margin-top: 0.75rem; }
-    #annualPrices dd { margin: 0.25rem 0; font-weight: 600; }
+    #dailySummary dt, #annualPrices dt { margin-top: 0.75rem; }
+    #dailySummary dd, #annualPrices dd { margin: 0.25rem 0; font-weight: 600; }
 
     #sankeyChart {
       width: 100%;
@@ -60,8 +64,29 @@
     <button type="button" id="showAnnual" aria-controls="annualPrices" aria-pressed="false">Vuositiedot</button>
   </div>
 
-  <section id="dailySummary" aria-label="Vuorokausitiedot">
+  <section id="dailySummary" aria-labelledby="dailySummaryTitle">
+    <h2 id="dailySummaryTitle">Vuorokauden energiatiedot</h2>
     <p id="sankeyMeta"></p>
+    <p id="dailySplitNotice"></p>
+    <div class="annual-groups" aria-live="polite">
+      <section class="annual-group">
+        <h3>Yhteiset tilat (Common)</h3>
+        <dl>
+          <dt>Ostosähkö</dt><dd id="dailyCommonGrid">–</dd>
+          <dt>Itse käytetty aurinkosähkö</dt><dd id="dailyCommonSolar">–</dd>
+          <dt>Verkkoon myynti (COMMON BN03)</dt><dd id="dailyCommonExport">–</dd>
+        </dl>
+      </section>
+      <section class="annual-group">
+        <h3>Asunnot yhteensä</h3>
+        <dl>
+          <dt>Ostosähkö</dt><dd id="dailyApartmentsGrid">–</dd>
+          <dt>Asunnoille kohdistettu aurinkosähkö (arvio 1/24)</dt><dd id="dailyApartmentsSolar">–</dd>
+          <dt>Verkkoon myynti</dt><dd id="dailyApartmentsExport">–</dd>
+        </dl>
+        <p>COMMON BN03 -myynti esitetään yhteisissä tiloissa.</p>
+      </section>
+    </div>
   </section>
 
   <section id="annualPrices" aria-labelledby="annualPricesTitle" hidden>

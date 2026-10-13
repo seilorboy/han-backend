@@ -84,23 +84,43 @@ function renderDailyMeta(data) {
   if (!metaEl) return;
 
   const meta = data.meta || {};
+  const selectedDate = formatFinnishDate(data.date) || data.date;
+  const unallocated = Number(meta.pv_unallocated_kwh || 0);
+  const missingIntervals = Number(meta.intervals_without_bn02 || 0);
+  const incompleteSplit = unallocated > 0 || missingIntervals > 0;
+  const suffix = incompleteSplit ? " (tiedot puutteelliset)" : "";
+  const showEnergy = (id, value, valueSuffix = "") => {
+    document.getElementById(id).textContent =
+      formatKwh(value) + " kWh" + valueSuffix;
+  };
 
-  metaEl.textContent =
-    "Päivä: " + data.date + "  |  " +
-    "PV: " + formatKwh(meta.pv_kwh) + " kWh  |  " +
-    "PV yhteisiin tiloihin: " + formatKwh(meta.pv_to_common_kwh) + " kWh  |  " +
-    "PV asuntoihin (arvio 1/24): " + formatKwh(meta.pv_to_apartments_kwh) + " kWh  |  " +
-    "Yhteisten tilojen ostosähkö: " + formatKwh(meta.common_load_kwh) + " kWh  |  " +
-    "Asuntojen ostosähkö: " + formatKwh(meta.apartments_load_kwh) + " kWh  |  " +
-    "Grid: " + formatKwh(meta.grid_to_load_kwh) + " kWh  |  " +
-    "Export: " + formatKwh(meta.pv_export_kwh) + " kWh" +
-    (Number(meta.internal_consumption_kwh || 0) > 0
-      ? "  |  Sisäiset kulutusalamittaukset: " +
-        formatKwh(meta.internal_consumption_kwh) + " kWh"
-      : "") +
-    (Number(meta.pv_unallocated_kwh || 0) > 0
-      ? "  |  Kohdistamaton PV: " + formatKwh(meta.pv_unallocated_kwh) + " kWh"
-      : "");
+  metaEl.textContent = "Päivä " + selectedDate +
+    "  |  Aurinkosähkön kokonaistuotanto: " + formatKwh(meta.pv_kwh) + " kWh";
+
+  showEnergy("dailyCommonGrid", meta.common_load_kwh);
+  showEnergy("dailyCommonSolar", meta.pv_to_common_kwh, suffix);
+  showEnergy("dailyCommonExport", meta.pv_export_kwh);
+  showEnergy("dailyApartmentsGrid", meta.apartments_load_kwh);
+  showEnergy("dailyApartmentsSolar", meta.pv_to_apartments_kwh, suffix);
+  showEnergy("dailyApartmentsExport", 0);
+
+  const notices = [];
+  if (incompleteSplit) {
+    notices.push(
+      "Aurinkosähkön jako on osittainen: " + formatKwh(unallocated) +
+      " kWh jäi kohdistamatta" +
+      (missingIntervals > 0
+        ? `, koska BN02-tietoja puuttui ${missingIntervals} mittausväliltä.`
+        : ".")
+    );
+  }
+  if (Number(meta.internal_consumption_kwh || 0) > 0) {
+    notices.push(
+      "Sisäisten kulutusalamittausten kulutus: " +
+      formatKwh(meta.internal_consumption_kwh) + " kWh."
+    );
+  }
+  document.getElementById("dailySplitNotice").textContent = notices.join(" ");
 }
 
 let currentAnnual = null;
