@@ -39,6 +39,11 @@
       width: 100%;
       height: 520px;
     }
+
+    #availableDataRange {
+      margin-left: 0.5rem;
+      color: #4b5563;
+    }
   </style>
 </head>
 
@@ -47,6 +52,7 @@
 
   <label for="sankeyDate">Päivä:</label>
   <input type="date" id="sankeyDate">
+  <span id="availableDataRange" aria-live="polite"></span>
   <button type="button" id="sankeyLoadBtn">Näytä</button>
 
   <div class="summary-buttons" role="group" aria-label="Näytettävät yhteenvetotiedot">

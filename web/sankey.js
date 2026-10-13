@@ -32,6 +32,22 @@ function formatKwh(value) {
   return Number.isFinite(number) ? energyFormatter.format(number) : "–";
 }
 
+function formatFinnishDate(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : null;
+}
+
+function renderAvailableDataRange(data) {
+  const rangeEl = document.getElementById("availableDataRange");
+  if (!rangeEl) return;
+
+  const start = formatFinnishDate(data?.available_data?.start_date);
+  const end = formatFinnishDate(data?.available_data?.end_date);
+  rangeEl.textContent = start && end
+    ? `(dataa saatavilla ${start} – ${end})`
+    : "(dataa ei ole saatavilla)";
+}
+
 function apartmentNumber(nodeName) {
   const match = /^APT(\d+)$/.exec(nodeName || "");
   return match ? Number(match[1]) : null;
@@ -187,6 +203,7 @@ async function loadSankey(dateStr) {
     const data = await resp.json();
     if (requestId !== latestSankeyRequest) return;
     console.log("Saatiin data:", data);
+    renderAvailableDataRange(data);
 
     if (!Array.isArray(data.nodes) || !Array.isArray(data.links)) {
       chartTitle.textContent = "Kaavion lataus epäonnistui.";

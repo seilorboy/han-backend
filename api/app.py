@@ -32,6 +32,33 @@ def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
 
 
+def get_measurement_date_range():
+    """Return the first and last measurement dates in Helsinki local time."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            "SELECT MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM measurements;"
+        )
+        row = cur.fetchone() or {}
+    finally:
+        cur.close()
+        conn.close()
+
+    def local_date(timestamp):
+        if timestamp is None:
+            return None
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(HELSINKI_TZ).date().isoformat()
+
+    return {
+        "start_date": local_date(row.get("first_ts")),
+        "end_date": local_date(row.get("last_ts")),
+    }
+
+
 # Luodaan han_energy-taulu tarvittaessa (tämä on erillinen testitaulu).
 def init_db():
     conn = get_db_connection()
@@ -736,6 +763,7 @@ def sankey():
         year_start_utc_naive,
         year_end_utc_naive,
     )
+    available_data = get_measurement_date_range()
 
     return jsonify(
         {
@@ -744,6 +772,7 @@ def sankey():
             "nodes": sankey_data["nodes"],
             "links": sankey_data["links"],
             "meta": sankey_data["meta"],
+            "available_data": available_data,
             "annual": {
                 "year": day.year,
                 **annual_totals,
