@@ -353,7 +353,8 @@ async function loadSankey(dateStr) {
         source: sources,
         target: targets,
         value: values,
-        color: linkColors
+        color: linkColors,
+        hovertemplate: "%{value:.2f} kWh<extra></extra>"
       }
     };
 
