@@ -378,22 +378,30 @@ def calculate_sankey_data(start_utc_naive, end_utc_naive):
 
 
 def annual_pv_split(intervals):
-    """Do not present partial/invalid annual PV allocations as complete savings."""
+    """Sum valid annual PV allocations and report any excluded intervals."""
     common = apartments = 0.0
     complete = True
+    included_intervals = 0
+    excluded_intervals = 0
     for interval in intervals:
         pv, bn02, bn03 = (interval[key] for key in ("pv", "bn02", "bn03"))
         if pv == 0 and bn03 == 0 and bn02 in (None, 0):
             continue
         if any(value is None for value in (pv, bn02, bn03)) or not 0 <= bn03 <= bn02 <= pv:
             complete = False
+            excluded_intervals += 1
             continue
         common += pv - bn02
         apartments += bn02 - bn03
+        included_intervals += 1
     return {
-        "common_kwh": round(common / 1000, 2) if complete else None,
-        "apartments_kwh": round(apartments / 1000, 2) if complete else None,
+        # Return the valid partial sums even when some intervals were excluded.
+        # The API consumer must use ``complete`` to label them accordingly.
+        "common_kwh": round(common / 1000, 2),
+        "apartments_kwh": round(apartments / 1000, 2),
         "complete": complete,
+        "included_intervals": included_intervals,
+        "excluded_intervals": excluded_intervals,
     }
 
 
@@ -489,6 +497,8 @@ def calculate_annual_totals(start_utc_naive, end_utc_naive):
             "export_kwh": 0.0,
         },
         "pv_split_complete": split["complete"],
+        "pv_split_included_intervals": split["included_intervals"],
+        "pv_split_excluded_intervals": split["excluded_intervals"],
         "grid_kwh": round(float(row.get("grid_wh") or 0) / 1000.0, 2),
         "export_kwh": round(float(row.get("export_wh") or 0) / 1000.0, 2),
         "pv_kwh": round(float(row.get("pv_wh") or 0) / 1000.0, 2),

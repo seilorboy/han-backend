@@ -102,19 +102,33 @@ function renderAnnualPrices() {
   const sale = Number(document.getElementById("salePrice").value);
   document.getElementById("purchasePriceValue").textContent = priceFormatter.format(purchase) + " snt/kWh";
   document.getElementById("salePriceValue").textContent = priceFormatter.format(sale) + " snt/kWh";
-  const show = (id, energy, price) => {
+  const show = (id, energy, price, suffix = "") => {
     document.getElementById(id).textContent = energy === null ? "–" :
-      formatKwh(energy) + " kWh · " + euroFormatter.format(energy * price / 100);
+      formatKwh(energy) + " kWh · " + euroFormatter.format(energy * price / 100) + suffix;
   };
+  const incompleteSplit = currentAnnual?.pv_split_complete === false;
   for (const group of ["common", "apartments"]) {
     const values = currentAnnual?.[group];
     show(group + "PurchaseCost", annualEnergy(values?.grid_kwh), purchase);
-    show(group + "SolarSavings", annualEnergy(values?.self_used_pv_kwh), purchase);
+    show(
+      group + "SolarSavings",
+      annualEnergy(values?.self_used_pv_kwh),
+      purchase,
+      incompleteSplit ? " (tiedot puutteelliset)" : ""
+    );
     show(group + "SaleCredit", annualEnergy(values?.export_kwh), sale);
   }
-  document.getElementById("annualSplitNotice").textContent = currentAnnual?.pv_split_complete === false
-    ? "Aurinkosähkön vuosijakoa ja säästöjä ei voida laskea: osasta mittausvälejä puuttuu PV-/BN02-/BN03-tietoja tai niiden arvot ovat ristiriidassa."
-    : "";
+  if (incompleteSplit) {
+    const included = Number(currentAnnual?.pv_split_included_intervals);
+    const excluded = Number(currentAnnual?.pv_split_excluded_intervals);
+    const coverage = Number.isFinite(included) && Number.isFinite(excluded)
+      ? ` Mukana ${included} mittausväliä, ohitettu ${excluded}.`
+      : "";
+    document.getElementById("annualSplitNotice").textContent =
+      "Aurinkosähkön jako ja säästö ovat osittaisia: laskennassa ovat mukana vain mittausvälit, joiden PV-, BN02- ja BN03-tiedot ovat täydelliset ja keskenään johdonmukaiset." + coverage;
+  } else {
+    document.getElementById("annualSplitNotice").textContent = "";
+  }
 }
 
 function renderAnnualMeta(data) {
