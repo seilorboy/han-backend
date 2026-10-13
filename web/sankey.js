@@ -32,6 +32,37 @@ function formatKwh(value) {
   return Number.isFinite(number) ? energyFormatter.format(number) : "–";
 }
 
+function apartmentNumber(nodeName) {
+  const match = /^APT(\d+)$/.exec(nodeName || "");
+  return match ? Number(match[1]) : null;
+}
+
+// Plotly voi muuten järjestää saman sarakkeen solmut linkkien painojen mukaan.
+// Annetaan sille asuntojen numeerista järjestystä vastaavat aloituspaikat.
+function sankeyNodePositions(nodes) {
+  const sources = new Set(["PV", "Grid"]);
+  const targetNodes = nodes.filter(node => !sources.has(node));
+  const fixedTargets = targetNodes.filter(node => apartmentNumber(node) === null);
+  const apartments = targetNodes
+    .filter(node => apartmentNumber(node) !== null)
+    .sort((left, right) => apartmentNumber(left) - apartmentNumber(right));
+  const orderedTargets = [...fixedTargets, ...apartments];
+  const targetRank = new Map(
+    orderedTargets.map((node, position) => [node, position])
+  );
+  const lastTarget = Math.max(orderedTargets.length - 1, 1);
+
+  return {
+    x: nodes.map(node => sources.has(node) ? 0.02 : 0.82),
+    y: nodes.map(node => {
+      if (node === "PV") return 0.02;
+      if (node === "Grid") return 0.58;
+      return 0.02 + 0.96 * targetRank.get(node) / lastTarget;
+    }),
+    targetCount: orderedTargets.length
+  };
+}
+
 function renderDailyMeta(data) {
   const metaEl = document.getElementById("sankeyMeta");
   if (!metaEl) return;
@@ -175,6 +206,8 @@ async function loadSankey(dateStr) {
       return "rgba(160,170,190,0.25)";
     });
 
+    const nodePositions = sankeyNodePositions(data.nodes);
+
     const chartEl = document.getElementById("sankeyChart");
 
     if (!chartEl) {
@@ -189,6 +222,8 @@ async function loadSankey(dateStr) {
       node: {
         label: labels,
         color: nodeColors,
+        x: nodePositions.x,
+        y: nodePositions.y,
         pad: 14,
         thickness: 18,
         line: { color: "rgba(0,0,0,0.15)", width: 1 }
@@ -202,10 +237,12 @@ async function loadSankey(dateStr) {
     };
 
     const layout = {
+      height: Math.max(520, nodePositions.targetCount * 32 + 80),
       margin: { l: 10, r: 10, t: 10, b: 10 },
       font: { size: 12 }
     };
 
+    chartEl.style.height = layout.height + "px";
     chartEl.hidden = false;
     chartTitle.textContent = period === "year"
       ? "Vuoden " + dateStr.slice(0, 4) + " energiavirrat (kWh)"
