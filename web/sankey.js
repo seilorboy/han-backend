@@ -79,6 +79,9 @@ function sankeyNodePositions(nodes) {
   };
 }
 
+let currentDaily = null;
+let currentDailyIncomplete = false;
+
 function renderDailyMeta(data) {
   const metaEl = document.getElementById("sankeyMeta");
   if (!metaEl) return;
@@ -88,21 +91,13 @@ function renderDailyMeta(data) {
   const unallocated = Number(meta.pv_unallocated_kwh || 0);
   const missingIntervals = Number(meta.intervals_without_bn02 || 0);
   const incompleteSplit = unallocated > 0 || missingIntervals > 0;
-  const suffix = incompleteSplit ? " (tiedot puutteelliset)" : "";
-  const showEnergy = (id, value, valueSuffix = "") => {
-    document.getElementById(id).textContent =
-      formatKwh(value) + " kWh" + valueSuffix;
-  };
+  currentDaily = meta;
+  currentDailyIncomplete = incompleteSplit;
 
   metaEl.textContent = "Päivä " + selectedDate +
     "  |  Aurinkosähkön kokonaistuotanto: " + formatKwh(meta.pv_kwh) + " kWh";
 
-  showEnergy("dailyCommonGrid", meta.common_load_kwh);
-  showEnergy("dailyCommonSolar", meta.pv_to_common_kwh, suffix);
-  showEnergy("dailyCommonExport", meta.pv_export_kwh);
-  showEnergy("dailyApartmentsGrid", meta.apartments_load_kwh);
-  showEnergy("dailyApartmentsSolar", meta.pv_to_apartments_kwh, suffix);
-  showEnergy("dailyApartmentsExport", 0);
+  renderDailyPrices();
 
   const notices = [];
   if (incompleteSplit) {
@@ -131,6 +126,29 @@ function annualEnergy(value) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function renderDailyPrices() {
+  const purchase = Number(document.getElementById("dailyPurchasePrice").value);
+  const sale = Number(document.getElementById("dailySalePrice").value);
+  document.getElementById("dailyPurchasePriceValue").textContent =
+    priceFormatter.format(purchase) + " snt/kWh";
+  document.getElementById("dailySalePriceValue").textContent =
+    priceFormatter.format(sale) + " snt/kWh";
+
+  const show = (id, energy, price, suffix = "") => {
+    document.getElementById(id).textContent = energy === null ? "–" :
+      formatKwh(energy) + " kWh · " +
+      euroFormatter.format(energy * price / 100) + suffix;
+  };
+  const suffix = currentDailyIncomplete ? " (tiedot puutteelliset)" : "";
+
+  show("dailyCommonGrid", annualEnergy(currentDaily?.common_load_kwh), purchase);
+  show("dailyCommonSolar", annualEnergy(currentDaily?.pv_to_common_kwh), purchase, suffix);
+  show("dailyCommonExport", annualEnergy(currentDaily?.pv_export_kwh), sale);
+  show("dailyApartmentsGrid", annualEnergy(currentDaily?.apartments_load_kwh), purchase);
+  show("dailyApartmentsSolar", annualEnergy(currentDaily?.pv_to_apartments_kwh), purchase, suffix);
+  show("dailyApartmentsExport", currentDaily ? 0 : null, sale);
 }
 
 function renderAnnualPrices() {
@@ -197,6 +215,9 @@ async function loadSankey(dateStr) {
   chartEl.hidden = true;
   chartTitle.textContent = "Ladataan kaaviota…";
   const requestId = ++latestSankeyRequest;
+  currentDaily = null;
+  currentDailyIncomplete = false;
+  renderDailyPrices();
   currentAnnual = null;
   renderAnnualPrices();
   const metaEl = document.getElementById("sankeyMeta");
@@ -311,12 +332,15 @@ async function loadSankey(dateStr) {
   }
 }
 
-function showSummary(period, reload = true) {
-  const annual = period === "annual";
+function showSummary(view, reload = true) {
+  const start = view === "start";
+  const daily = view === "daily";
+  const annual = view === "annual";
   selectedPeriod = annual ? "year" : "day";
-  document.getElementById("dailySummary").hidden = annual;
+  document.getElementById("dailySummary").hidden = !daily;
   document.getElementById("annualPrices").hidden = !annual;
-  document.getElementById("showDaily").setAttribute("aria-pressed", String(!annual));
+  document.getElementById("showStart").setAttribute("aria-pressed", String(start));
+  document.getElementById("showDaily").setAttribute("aria-pressed", String(daily));
   document.getElementById("showAnnual").setAttribute("aria-pressed", String(annual));
   const date = document.getElementById("sankeyDate").value;
   if (reload && date) loadSankey(date);
@@ -329,9 +353,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const button = document.getElementById("sankeyLoadBtn");
   const defaultDate = "2025-09-01";
 
+  document.getElementById("showStart").addEventListener("click", () => showSummary("start"));
   document.getElementById("showDaily").addEventListener("click", () => showSummary("daily"));
   document.getElementById("showAnnual").addEventListener("click", () => showSummary("annual"));
-  showSummary("daily", false);
+  showSummary("start", false);
 
   if (dateInput) dateInput.value = defaultDate;
 
@@ -350,6 +375,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   for (const id of ["purchasePrice", "salePrice"]) {
     document.getElementById(id).addEventListener("input", renderAnnualPrices);
+  }
+  for (const id of ["dailyPurchasePrice", "dailySalePrice"]) {
+    document.getElementById(id).addEventListener("input", renderDailyPrices);
   }
 
   loadSankey(defaultDate);

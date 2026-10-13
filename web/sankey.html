@@ -60,29 +60,42 @@
   <button type="button" id="sankeyLoadBtn">Näytä</button>
 
   <div class="summary-buttons" role="group" aria-label="Näytettävät yhteenvetotiedot">
-    <button type="button" id="showDaily" aria-controls="dailySummary" aria-pressed="true">Vuorokausitiedot</button>
+    <button type="button" id="showStart" aria-controls="sankeyChart" aria-pressed="true">Aloitusnäkymä</button>
+    <button type="button" id="showDaily" aria-controls="dailySummary" aria-pressed="false">Vuorokausitiedot</button>
     <button type="button" id="showAnnual" aria-controls="annualPrices" aria-pressed="false">Vuositiedot</button>
   </div>
 
-  <section id="dailySummary" aria-labelledby="dailySummaryTitle">
+  <section id="dailySummary" aria-labelledby="dailySummaryTitle" hidden>
     <h2 id="dailySummaryTitle">Vuorokauden energiatiedot</h2>
+    <div class="price-controls">
+      <div>
+        <label for="dailyPurchasePrice">Sähkön hinta: <output id="dailyPurchasePriceValue" for="dailyPurchasePrice">20,0 snt/kWh</output></label>
+        <input id="dailyPurchasePrice" type="range" min="0" max="100" step="0.1" value="20">
+      </div>
+      <div>
+        <label for="dailySalePrice">Myydyn sähkön hyvityshinta: <output id="dailySalePriceValue" for="dailySalePrice">5,0 snt/kWh</output></label>
+        <input id="dailySalePrice" type="range" min="0" max="100" step="0.1" value="5">
+      </div>
+    </div>
+    <p>Arvio valitun vuorokauden energiasta käyttäen vakiohintoja.
+      Oletushinnat ovat esimerkkejä. Samat hinnat koskevat molempia ryhmiä.</p>
     <p id="sankeyMeta"></p>
     <p id="dailySplitNotice"></p>
     <div class="annual-groups" aria-live="polite">
       <section class="annual-group">
         <h3>Yhteiset tilat (Common)</h3>
         <dl>
-          <dt>Ostosähkö</dt><dd id="dailyCommonGrid">–</dd>
-          <dt>Itse käytetty aurinkosähkö</dt><dd id="dailyCommonSolar">–</dd>
-          <dt>Verkkoon myynti (COMMON BN03)</dt><dd id="dailyCommonExport">–</dd>
+          <dt>Ostosähkö ja kustannus</dt><dd id="dailyCommonGrid">–</dd>
+          <dt>Itse käytetty aurinkosähkö ja säästö</dt><dd id="dailyCommonSolar">–</dd>
+          <dt>Verkkoon myynti ja hyvitys (COMMON BN03)</dt><dd id="dailyCommonExport">–</dd>
         </dl>
       </section>
       <section class="annual-group">
         <h3>Asunnot yhteensä</h3>
         <dl>
-          <dt>Ostosähkö</dt><dd id="dailyApartmentsGrid">–</dd>
-          <dt>Asunnoille kohdistettu aurinkosähkö (arvio 1/24)</dt><dd id="dailyApartmentsSolar">–</dd>
-          <dt>Verkkoon myynti</dt><dd id="dailyApartmentsExport">–</dd>
+          <dt>Ostosähkö ja kustannus</dt><dd id="dailyApartmentsGrid">–</dd>
+          <dt>Asunnoille kohdistettu aurinkosähkö ja säästö (arvio 1/24)</dt><dd id="dailyApartmentsSolar">–</dd>
+          <dt>Verkkoon myynti ja hyvitys</dt><dd id="dailyApartmentsExport">–</dd>
         </dl>
         <p>COMMON BN03 -myynti esitetään yhteisissä tiloissa.</p>
       </section>
