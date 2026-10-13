@@ -119,13 +119,26 @@ function renderDailyMeta(data) {
 
   const meta = data.meta || {};
   const selectedDate = formatFinnishDate(data.date) || data.date;
+  const hourly = data.period === "hour";
+  const hour = Number(data.hour);
+  const hourRange = Number.isInteger(hour)
+    ? `${String(hour).padStart(2, "0")}.00–${String(hour + 1).padStart(2, "0")}.00`
+    : "";
   const unallocated = Number(meta.pv_unallocated_kwh || 0);
   const missingIntervals = Number(meta.intervals_without_bn02 || 0);
   const incompleteSplit = unallocated > 0 || missingIntervals > 0;
   currentDaily = meta;
   currentDailyIncomplete = incompleteSplit;
 
-  metaEl.textContent = "Päivä " + selectedDate +
+  document.getElementById("dailySummaryTitle").textContent = hourly
+    ? "Tunnin energiatiedot"
+    : "Vuorokauden energiatiedot";
+  document.getElementById("intervalPriceDescription").textContent = hourly
+    ? "Arvio valitun tunnin energiasta käyttäen vakiohintoja."
+    : "Arvio valitun vuorokauden energiasta käyttäen vakiohintoja.";
+
+  metaEl.textContent = (hourly ? "Tunti " : "Päivä ") + selectedDate +
+    (hourly ? " klo " + hourRange : "") +
     "  |  Aurinkosähkön kokonaistuotanto: " + formatKwh(meta.pv_kwh) + " kWh";
 
   renderDailyPrices();
@@ -259,7 +272,10 @@ async function loadSankey(dateStr) {
   console.log("Ladataan Sankey päivälle:", dateStr);
 
   try {
-    const url = "/api/sankey?date=" + encodeURIComponent(dateStr) + "&period=" + period;
+    const hour = document.getElementById("sankeyHour").value;
+    const hourParameter = period === "hour" ? "&hour=" + encodeURIComponent(hour) : "";
+    const url = "/api/sankey?date=" + encodeURIComponent(dateStr) +
+      "&period=" + period + hourParameter;
     console.log("Fetch:", url);
 
     const resp = await fetch(url);
@@ -286,7 +302,7 @@ async function loadSankey(dateStr) {
       return;
     }
 
-    if (period === "day") renderDailyMeta(data);
+    if (period === "day" || period === "hour") renderDailyMeta(data);
     renderAnnualMeta(data);
 
     const labels = data.nodes.map(localizeNode);
@@ -349,9 +365,17 @@ async function loadSankey(dateStr) {
 
     chartEl.style.height = layout.height + "px";
     chartEl.hidden = false;
-    chartTitle.textContent = period === "year"
-      ? "Vuoden " + dateStr.slice(0, 4) + " energiavirrat (kWh)"
-      : "Päivän " + dateStr + " energiavirrat (kWh)";
+    if (period === "year") {
+      chartTitle.textContent = "Vuoden " + dateStr.slice(0, 4) + " energiavirrat (kWh)";
+    } else if (period === "hour") {
+      const selectedHour = Number(data.hour);
+      const hourRange = `${String(selectedHour).padStart(2, "0")}.00–` +
+        `${String(selectedHour + 1).padStart(2, "0")}.00`;
+      chartTitle.textContent = "Tunnin " + dateStr + " klo " + hourRange +
+        " energiavirrat (kWh)";
+    } else {
+      chartTitle.textContent = "Päivän " + dateStr + " energiavirrat (kWh)";
+    }
     Plotly.react(chartEl, [trace], layout, { responsive: true });
   } catch (err) {
     if (requestId !== latestSankeyRequest) return;
@@ -369,12 +393,15 @@ function showSummary(view, reload = true) {
   const start = view === "start";
   const daily = view === "daily";
   const annual = view === "annual";
-  selectedPeriod = annual ? "year" : "day";
-  document.getElementById("dailySummary").hidden = !daily;
+  const hourly = view === "hourly";
+  selectedPeriod = annual ? "year" : hourly ? "hour" : "day";
+  document.getElementById("hourControl").hidden = !hourly;
+  document.getElementById("dailySummary").hidden = !(daily || hourly);
   document.getElementById("annualPrices").hidden = !annual;
   document.getElementById("showStart").setAttribute("aria-pressed", String(start));
   document.getElementById("showDaily").setAttribute("aria-pressed", String(daily));
   document.getElementById("showAnnual").setAttribute("aria-pressed", String(annual));
+  document.getElementById("showHourly").setAttribute("aria-pressed", String(hourly));
   const date = document.getElementById("sankeyDate").value;
   if (reload && date) loadSankey(date);
 }
@@ -383,12 +410,23 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoaded, asetetaan painike ja oletuspäivä");
 
   const dateInput = document.getElementById("sankeyDate");
+  const hourInput = document.getElementById("sankeyHour");
   const button = document.getElementById("sankeyLoadBtn");
   const defaultDate = "2025-09-01";
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    const option = document.createElement("option");
+    option.value = String(hour);
+    option.textContent = `${String(hour).padStart(2, "0")}.00–` +
+      `${String(hour + 1).padStart(2, "0")}.00`;
+    hourInput.appendChild(option);
+  }
+  hourInput.value = "12";
 
   document.getElementById("showStart").addEventListener("click", () => showSummary("start"));
   document.getElementById("showDaily").addEventListener("click", () => showSummary("daily"));
   document.getElementById("showAnnual").addEventListener("click", () => showSummary("annual"));
+  document.getElementById("showHourly").addEventListener("click", () => showSummary("hourly"));
   showSummary("start", false);
 
   if (dateInput) dateInput.value = defaultDate;
@@ -411,6 +449,12 @@ document.addEventListener("DOMContentLoaded", function () {
       validateSelectedDate(dateInput.value);
     });
   }
+
+  hourInput.addEventListener("change", function () {
+    if (selectedPeriod === "hour" && dateInput?.value) {
+      loadSankey(dateInput.value);
+    }
+  });
 
   for (const id of ["purchasePrice", "salePrice"]) {
     document.getElementById(id).addEventListener("input", renderAnnualPrices);

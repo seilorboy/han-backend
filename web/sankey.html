@@ -62,6 +62,10 @@
   <label for="sankeyDate">Päivä:</label>
   <input type="date" id="sankeyDate">
   <span id="availableDataRange" aria-live="polite"></span>
+  <span id="hourControl" hidden>
+    <label for="sankeyHour">Tunti:</label>
+    <select id="sankeyHour"></select>
+  </span>
   <button type="button" id="sankeyLoadBtn">Näytä</button>
   <p id="dateStatus" role="status" aria-live="polite"></p>
 
@@ -69,6 +73,7 @@
     <button type="button" id="showStart" aria-controls="sankeyChart" aria-pressed="true">Aloitusnäkymä</button>
     <button type="button" id="showDaily" aria-controls="dailySummary" aria-pressed="false">Vuorokausitiedot</button>
     <button type="button" id="showAnnual" aria-controls="annualPrices" aria-pressed="false">Vuositiedot</button>
+    <button type="button" id="showHourly" aria-controls="hourControl dailySummary sankeyChart" aria-pressed="false">Tuntitiedot</button>
   </div>
 
   <section id="dailySummary" aria-labelledby="dailySummaryTitle" hidden>
@@ -83,7 +88,7 @@
         <input id="dailySalePrice" type="range" min="0" max="100" step="0.1" value="5">
       </div>
     </div>
-    <p>Arvio valitun vuorokauden energiasta käyttäen vakiohintoja.
+    <p><span id="intervalPriceDescription">Arvio valitun vuorokauden energiasta käyttäen vakiohintoja.</span>
       Oletushinnat ovat esimerkkejä. Samat hinnat koskevat molempia ryhmiä.</p>
     <p id="sankeyMeta"></p>
     <p id="dailySplitNotice"></p>

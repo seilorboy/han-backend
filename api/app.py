@@ -731,15 +731,15 @@ def energy_quarter_hour():
 @app.route("/api/sankey", methods=["GET"])
 def sankey():
     """
-    Palauttaa yhden päivän Sankey-datan sekä valitun päivän
-    kalenterivuoden Grid-, Export- ja PV-yhteenvedon.
+    Palauttaa valitun tunnin, päivän tai vuoden Sankey-datan sekä valitun
+    päivän kalenterivuoden Grid-, Export- ja PV-yhteenvedon.
 
-    Parametrit: ?date=YYYY-MM-DD&period=day|year (oletus day).
+    Parametrit: ?date=YYYY-MM-DD&period=hour|day|year&hour=0..23.
     """
 
     period = request.args.get("period", "day")
-    if period not in ("day", "year"):
-        return jsonify({"error": "Invalid period, use day or year"}), 400
+    if period not in ("hour", "day", "year"):
+        return jsonify({"error": "Invalid period, use hour, day or year"}), 400
     date_str = request.args.get("date")
 
     if not date_str:
@@ -749,6 +749,15 @@ def sankey():
         day = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"error": "Invalid date format, use YYYY-MM-DD"}), 400
+
+    selected_hour = None
+    if period == "hour":
+        try:
+            selected_hour = int(request.args.get("hour", ""))
+        except ValueError:
+            return jsonify({"error": "Invalid hour, use 0..23"}), 400
+        if selected_hour not in range(24):
+            return jsonify({"error": "Invalid hour, use 0..23"}), 400
 
     # Valittu päivä Helsingin ajassa -> UTC-naive rajat MySQL:lle.
     day_start_local = datetime(
@@ -765,6 +774,19 @@ def sankey():
     day_end_utc_naive = (
         day_end_local.astimezone(UTC).replace(tzinfo=None)
     )
+
+    if selected_hour is not None:
+        hour_start_local = datetime(
+            year=day.year,
+            month=day.month,
+            day=day.day,
+            hour=selected_hour,
+            tzinfo=HELSINKI_TZ,
+        )
+        hour_start_utc_naive = (
+            hour_start_local.astimezone(UTC).replace(tzinfo=None)
+        )
+        hour_end_utc_naive = hour_start_utc_naive + timedelta(hours=1)
 
     # Valitun päivän kalenterivuosi Helsingin ajassa.
     year_start_local = datetime(
@@ -787,10 +809,14 @@ def sankey():
         year_end_local.astimezone(UTC).replace(tzinfo=None)
     )
 
-    sankey_data = calculate_sankey_data(
-        year_start_utc_naive if period == "year" else day_start_utc_naive,
-        year_end_utc_naive if period == "year" else day_end_utc_naive,
-    )
+    if period == "year":
+        sankey_start, sankey_end = year_start_utc_naive, year_end_utc_naive
+    elif period == "hour":
+        sankey_start, sankey_end = hour_start_utc_naive, hour_end_utc_naive
+    else:
+        sankey_start, sankey_end = day_start_utc_naive, day_end_utc_naive
+
+    sankey_data = calculate_sankey_data(sankey_start, sankey_end)
     annual_totals = calculate_annual_totals(
         year_start_utc_naive,
         year_end_utc_naive,
@@ -801,6 +827,7 @@ def sankey():
         {
             "date": date_str,
             "period": period,
+            "hour": selected_hour,
             "nodes": sankey_data["nodes"],
             "links": sankey_data["links"],
             "meta": sankey_data["meta"],

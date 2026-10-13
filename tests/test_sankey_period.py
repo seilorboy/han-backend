@@ -39,6 +39,21 @@ class SankeyPeriodTests(TestCase):
         self.assertEqual(body['period'], 'day')
         calc.assert_called_once_with(datetime(2025, 8, 31, 21), datetime(2025, 9, 1, 21))
 
+    def test_hour_uses_selected_helsinki_hour(self):
+        (body, status), calc, _ = self.call_route(dict(
+            date='2025-09-01', period='hour', hour='13'))
+        self.assertEqual(status, 200)
+        self.assertEqual(body['period'], 'hour')
+        self.assertEqual(body['hour'], 13)
+        calc.assert_called_once_with(datetime(2025, 9, 1, 10), datetime(2025, 9, 1, 11))
+
+    def test_invalid_hour(self):
+        (_, status), calc, date_range = self.call_route(dict(
+            date='2025-09-01', period='hour', hour='24'))
+        self.assertEqual(status, 400)
+        calc.assert_not_called()
+        date_range.assert_not_called()
+
     def test_invalid_period(self):
         (_, status), calc, date_range = self.call_route(dict(date='2025-09-01', period='month'))
         self.assertEqual(status, 400)
