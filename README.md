@@ -367,6 +367,48 @@ GROUP BY meter_id, ts
 HAVING COUNT(*) > 1;
 ```
 
+## Importing the detailed energy-community workbook
+
+`tools/import_energy_community_workbook.py` imports the current workbook format
+with `Kiinteistö` and `Asukkaat` sheets. It maps the source as follows:
+
+- Solax production to `PV_MAIN / INTERNAL / wh_prod`
+- common-area BN01 import and export to `COMMON_MAIN / BN01`
+- common-area BN02 import to `COMMON_MAIN / BN02`
+- common-area BN02 export to apartment solar benefit plus BN03 export
+- common-area final import and export to `COMMON_MAIN / BN03`
+- apartment pre-credit consumption to apartment BN01 and BN02 import
+- apartment final billing consumption to apartment BN03 import
+
+The workbook timestamps are interpreted as Europe/Helsinki wall-clock times
+and converted to UTC before storage. An ambiguous autumn clock-change hour is
+skipped unless `--dst-fold first` or `--dst-fold second` is selected explicitly.
+Rows without timestamps are never assigned an invented timestamp.
+
+The importer runs as a preview unless `--apply` is supplied. Build and preview
+it through the optional Compose profile:
+
+```bash
+docker compose --profile tools build importer
+docker compose --profile tools run --rm importer \
+  "/workspace/data/energy-community.xlsx"
+```
+
+The preview reports source coverage, skipped rows, reconstructed totals and
+source-balance warnings. Take and verify a database backup before writing. A
+write with reported warnings also requires explicit acknowledgement:
+
+```bash
+docker compose --profile tools run --rm importer \
+  "/workspace/data/energy-community.xlsx" \
+  --accept-source-warnings \
+  --apply
+```
+
+The import uses one transaction and upserts the complete energy channels for
+each imported `(meter_id, ts, reading_type)` key. It does not delete intervals
+outside the workbook or fabricate missing source intervals.
+
 ## Testing Sankey with synthetic BN02 data
 
 Use `tools/generate_bn02_test_data.py` to generate temporary BN02 series for

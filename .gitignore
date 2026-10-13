@@ -7,6 +7,7 @@ __pycache__/
 db_data/
 *.log
 data/
+*.xlsx
 
 # Ympäristömuuttujat
 .env
@@ -15,5 +16,5 @@ data/
 *.old
 *.save
 backups/
-.sql.gz
+*.sql.gz
 db/legacy/

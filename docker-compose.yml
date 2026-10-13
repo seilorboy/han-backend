@@ -39,6 +39,20 @@ services:
     ports:
       - "127.0.0.1:8081:80"
 
+  importer:
+    profiles:
+      - tools
+    build: ./tools
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    volumes:
+      - ./:/workspace:ro
+
 
 volumes:
   db_data:
