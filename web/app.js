@@ -9,17 +9,60 @@ const statusEl = document.getElementById("status");
 const ctx = document.getElementById("energyChart").getContext("2d");
 
 let chart = null;
+let availableDataRange = { startDate: null, endDate: null };
 
-// Oletuksena tanaan
 const today = new Date().toISOString().slice(0, 10);
-dateInput.value = today;
+
+function formatFinnishDate(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : null;
+}
+
+function dateIsAvailable(date) {
+  const { startDate, endDate } = availableDataRange;
+  return !startDate || !endDate || (date >= startDate && date <= endDate);
+}
+
+function validateSelectedDate(date) {
+  if (date && !dateIsAvailable(date)) {
+    statusEl.textContent = "Valitulta ajankohdalta ei ole dataa saatavilla!";
+    return false;
+  }
+  return true;
+}
+
+async function loadAvailableDateRange() {
+  const resp = await fetch(`${API_BASE}/api/energy/date-range`);
+  if (!resp.ok) throw new Error("API error: " + resp.status);
+
+  const range = await resp.json();
+  const startDate = range.start_date || null;
+  const endDate = range.end_date || null;
+  availableDataRange = { startDate, endDate };
+
+  const rangeEl = document.getElementById("availableDataRange");
+  const start = formatFinnishDate(startDate);
+  const end = formatFinnishDate(endDate);
+  rangeEl.textContent = start && end
+    ? `(dataa saatavilla ${start} – ${end})`
+    : "(dataa ei ole saatavilla)";
+
+  if (startDate && endDate) {
+    dateInput.min = startDate;
+    dateInput.max = endDate;
+    dateInput.value = today < startDate ? startDate : today > endDate ? endDate : today;
+  } else {
+    dateInput.value = today;
+  }
+}
 
 async function loadData() {
   const date = dateInput.value;
   if (!date) {
-    alert("Valitse paiva");
+    alert("Valitse päivä");
     return;
   }
+  if (!validateSelectedDate(date)) return;
 
   statusEl.textContent = "Ladataan dataa...";
 
@@ -80,6 +123,19 @@ async function loadData() {
 }
 
 loadBtn.addEventListener("click", loadData);
+dateInput.addEventListener("change", function () {
+  if (validateSelectedDate(dateInput.value)) statusEl.textContent = "";
+});
 
-// Ladataan heti aluksi
-loadData();
+async function initializePage() {
+  try {
+    await loadAvailableDateRange();
+    await loadData();
+  } catch (err) {
+    console.error(err);
+    dateInput.value = today;
+    statusEl.textContent = "Virhe data-alueen latauksessa: " + err.message;
+  }
+}
+
+initializePage();

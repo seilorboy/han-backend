@@ -37,15 +37,46 @@ function formatFinnishDate(isoDate) {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : null;
 }
 
+let availableDataRange = { startDate: null, endDate: null };
+
 function renderAvailableDataRange(data) {
   const rangeEl = document.getElementById("availableDataRange");
   if (!rangeEl) return;
 
-  const start = formatFinnishDate(data?.available_data?.start_date);
-  const end = formatFinnishDate(data?.available_data?.end_date);
+  const startDate = data?.available_data?.start_date || null;
+  const endDate = data?.available_data?.end_date || null;
+  const start = formatFinnishDate(startDate);
+  const end = formatFinnishDate(endDate);
+  const dateInput = document.getElementById("sankeyDate");
+  availableDataRange = { startDate, endDate };
+
+  if (dateInput && startDate && endDate) {
+    dateInput.min = startDate;
+    dateInput.max = endDate;
+  } else if (dateInput) {
+    dateInput.removeAttribute("min");
+    dateInput.removeAttribute("max");
+  }
+
   rangeEl.textContent = start && end
     ? `(dataa saatavilla ${start} – ${end})`
     : "(dataa ei ole saatavilla)";
+  if (dateInput?.value) validateSelectedDate(dateInput.value);
+}
+
+function dateIsAvailable(date) {
+  const { startDate, endDate } = availableDataRange;
+  return !startDate || !endDate || (date >= startDate && date <= endDate);
+}
+
+function validateSelectedDate(date) {
+  const statusEl = document.getElementById("dateStatus");
+  if (date && !dateIsAvailable(date)) {
+    statusEl.textContent = "Valitulta ajankohdalta ei ole dataa saatavilla!";
+    return false;
+  }
+  statusEl.textContent = "";
+  return true;
 }
 
 function apartmentNumber(nodeName) {
@@ -209,6 +240,8 @@ let latestSankeyRequest = 0;
 let selectedPeriod = "day";
 
 async function loadSankey(dateStr) {
+  if (!validateSelectedDate(dateStr)) return;
+
   const period = selectedPeriod;
   const chartEl = document.getElementById("sankeyChart");
   const chartTitle = document.getElementById("sankeyChartTitle");
@@ -369,7 +402,13 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      loadSankey(date);
+      if (validateSelectedDate(date)) loadSankey(date);
+    });
+  }
+
+  if (dateInput) {
+    dateInput.addEventListener("change", function () {
+      validateSelectedDate(dateInput.value);
     });
   }
 

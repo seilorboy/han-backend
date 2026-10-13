@@ -59,6 +59,33 @@ def get_measurement_date_range():
     }
 
 
+def get_energy_date_range():
+    """Return the first and last han_energy dates in Helsinki local time."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            "SELECT MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM han_energy;"
+        )
+        row = cur.fetchone() or {}
+    finally:
+        cur.close()
+        conn.close()
+
+    def local_date(timestamp):
+        if timestamp is None:
+            return None
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(HELSINKI_TZ).date().isoformat()
+
+    return {
+        "start_date": local_date(row.get("first_ts")),
+        "end_date": local_date(row.get("last_ts")),
+    }
+
+
 # Luodaan han_energy-taulu tarvittaessa (tämä on erillinen testitaulu).
 def init_db():
     conn = get_db_connection()
@@ -601,6 +628,11 @@ def latest_energy():
             "energy_kwh": float(energy_kwh),
         }
     ), 200
+
+
+@app.route("/api/energy/date-range", methods=["GET"])
+def energy_date_range():
+    return jsonify(get_energy_date_range()), 200
 
 
 @app.route("/api/energy/quarter-hour", methods=["GET"])

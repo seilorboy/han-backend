@@ -48,6 +48,11 @@
       margin-left: 0.5rem;
       color: #4b5563;
     }
+
+    #dateStatus:not(:empty) {
+      color: #a12424;
+      font-weight: 600;
+    }
   </style>
 </head>
 
@@ -58,6 +63,7 @@
   <input type="date" id="sankeyDate">
   <span id="availableDataRange" aria-live="polite"></span>
   <button type="button" id="sankeyLoadBtn">Näytä</button>
+  <p id="dateStatus" role="status" aria-live="polite"></p>
 
   <div class="summary-buttons" role="group" aria-label="Näytettävät yhteenvetotiedot">
     <button type="button" id="showStart" aria-controls="sankeyChart" aria-pressed="true">Aloitusnäkymä</button>
